@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "jitc-genai-validation"
+version = "0.1.0"
+description = ""
+authors = ["Martin Lopez <78863793+martinmanuel9@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.9"
+fastapi = "^0.115.4"
+uvicorn = "^0.32.0"
+farm-haystack = "^1.26.3"
+numpy = "2.1.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
