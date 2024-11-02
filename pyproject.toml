@@ -11,7 +11,18 @@ fastapi = "^0.115.4"
 uvicorn = "^0.32.0"
 farm-haystack = "^1.26.3"
 numpy = "2.1.2"
+pymilvus = "^2.4.9"
+pinecone-client = "^5.0.1"
+huggingface = "^0.0.1"
+rag = "^0.1.0"
+haystack-ai = "^2.6.1"
+datasets = "^3.1.0"
 
+
+[[tool.poetry.source]]
+name = "pytorch_cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core"]

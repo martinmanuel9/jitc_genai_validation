@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  milvus:
+    image: milvusdb/milvus:v2.4.9
+    container_name: milvus
+    environment:
+      TZ: UTC
+    volumes:
+      - ./volumes/milvus/db:/var/lib/milvus/db
+      - ./volumes/milvus/conf:/var/lib/milvus/conf
+      - ./volumes/milvus/logs:/var/lib/milvus/logs
+      - ./volumes/milvus/wal:/var/lib/milvus/wal
+    ports:
+      - "19530:19530"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "19530"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-jitc_gen_ai_db}
+    volumes:
+      - ./volumes/postgres/data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  milvus-db:
+  milvus-conf:
+  milvus-logs:
+  milvus-wal:
+  postgres-data:

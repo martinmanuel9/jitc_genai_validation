@@ -1,1 +1,3 @@
-documents/** 
+.env
+src/data/**
+volumes/**
