@@ -24,6 +24,9 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi
 
+# Copy the .env file to the image
+COPY .env /app
+
 # Copy the rest of the application code into /app
 COPY . .
 
