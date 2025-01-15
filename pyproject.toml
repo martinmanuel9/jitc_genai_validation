@@ -29,3 +29,7 @@ priority = "explicit"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.packages]
+# Telling Poetry: "Please include everything under the src/ directory."
+include = ["src"]

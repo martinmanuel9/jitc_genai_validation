@@ -14,9 +14,9 @@ class LLMService:
     def __init__(self):
         # Initialize LLMs
         # self.llama_node = PromptNode(model_name_or_path="path/to/llama/model")
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_api_key = os.getenv("OPEN_AI_API_KEY")
         if not self.openai_api_key:
-            raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY environment variable.")
+            raise ValueError("OpenAI API key not found. Set OPEN_AI_API_KEY environment variable.")
         
         self.open_ai_client = OpenAI(
             #This is the default and can be omitted

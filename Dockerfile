@@ -1,10 +1,10 @@
 # Use Python 3.11 as base image
 FROM python:3.11.9-slim
 
-# Set working directory to the directory containing main.py
-WORKDIR /app/src/app
+# Prevent prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies and Poetry
+# Install system dependencies & Poetry
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
@@ -16,25 +16,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Add Poetry to PATH
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy Poetry files to root of app directory
+# Create a working directory
 WORKDIR /app
+
+# Copy only Poetry lock files first (better for caching)
 COPY pyproject.toml poetry.lock ./
 
 # Install dependencies with Poetry
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi
 
-# Copy the .env file to the image
-COPY .env /app
-
-# Copy the rest of the application code into /app
+# Now copy everything else (source code, .env, etc.)
 COPY . .
 
-# Expose ports for vector database and FastAPI
-EXPOSE 19530 8000
+# (Optional) If your code references .env at runtime,
+# you can confirm it’s present or load it in your code directly.
+# In some setups, you might handle environment variables differently.
 
-# Set working directory back to src/app
-WORKDIR /app/src/app
+# Expose FastAPI port
+EXPOSE 8000
 
-# Set default command to start FastAPI server with Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# If your entry point is src/app/main.py, you can directly call uvicorn:
+CMD ["uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

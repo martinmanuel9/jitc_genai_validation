@@ -14,7 +14,7 @@ Run the following command to build docker images
 make build
 ```
 
-1. Builds Milvus
+1. Builds chroma
 2. Builds environment 
 3. Builds Postegres SQL DB
 
