@@ -1,40 +1,17 @@
 services:
-  postgres:
-    image: postgres:17
-    container_name: postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpassword}
-      POSTGRES_DB: ${POSTGRES_DB:-jitc_gen_ai_db}
-    volumes:
-      - ./volumes/postgres/data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   chroma:
+    image: chromadb/chroma:latest
     container_name: chroma
-    image: ghcr.io/chroma-core/chroma:3.5
     environment:
-      CHROMA_API_IMPL: chromadb.api.fastapi.FastAPI
-      CHROMA_DB_IMPL: chromadb.db.postgresql.PostgresDB
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpassword}
-      POSTGRES_DB: ${POSTGRES_DB:-chroma_db}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
+      CHROMA_SERVER_BIND: 0.0.0.0:8000 # Bind Chroma to all interfaces on port 8000
+      CHROMA_DB_IMPL: chromadb.db.duckdb.DuckDB # Use DuckDB as the database backend
+      CHROMA_DB_DIR: /chroma_data # Directory for DuckDB database storage
     volumes:
-      - ./volumes/chroma:/chroma_data
+      - ./volumes/chroma:/chroma_data # Persistent storage for DuckDB
     ports:
-      - "8001:8001"
-    depends_on:
-      - postgres
+      - "8000:8000" # Expose Chroma on port 8000
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001 || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -48,7 +25,6 @@ services:
       - "9000:9000"
     env_file: .env
     depends_on:
-      - postgres
       - chroma
 
 networks:

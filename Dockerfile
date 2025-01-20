@@ -3,30 +3,29 @@ FROM python:3.11.9-slim
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libpq-dev \
+    git \
     python3-dev \
     curl \
     wget \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.5.1
-
-ENV PATH="/root/.local/bin:$PATH"
-
+# Set up working directory
 WORKDIR /app
 
-# Copy Poetry files first
-COPY pyproject.toml poetry.lock ./
+# Clone Chroma repository from GitHub
+RUN git clone https://github.com/chroma-core/chroma.git
 
-# Install dependencies with logs
-# RUN poetry config virtualenvs.create false \
-#     && poetry install --no-interaction --no-ansi --verbose || cat /root/.cache/pypoetry/log/debug.log
+# Set working directory to the cloned repository
+WORKDIR /app/chroma
 
-# Copy the remaining code
-COPY . .
+# Install Python dependencies
+RUN pip install --upgrade pip \
+    && pip install poetry \
+    && poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi
 
-EXPOSE 8000
+# Expose the Chroma API port
+EXPOSE 8001
 
-CMD ["uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to start Chroma
+CMD ["uvicorn", "chromadb.app:app", "--host", "0.0.0.0", "--port", "8001"]
