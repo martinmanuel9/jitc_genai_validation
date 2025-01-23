@@ -1,32 +1,15 @@
 services:
-  chroma:
-    image: chromadb/chroma:latest
-    container_name: chroma
-    environment:
-      CHROMA_SERVER_BIND: 0.0.0.0:8000 # Bind Chroma to all interfaces on port 8000
-      CHROMA_DB_IMPL: chromadb.db.duckdb.DuckDB # Use DuckDB as the database backend
-      CHROMA_DB_DIR: /chroma_data # Directory for DuckDB database storage
-    volumes:
-      - ./volumes/chroma:/chroma_data # Persistent storage for DuckDB
-    ports:
-      - "8000:8000" # Expose Chroma on port 8000
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  fastapi:
+  chromadb:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fastapi_app
+    container_name: chromadb
     ports:
-      - "9000:9000"
-    env_file: .env
-    depends_on:
-      - chroma
+      - "8000:8000"
+    environment:
+      - CHROMADB_PERSIST_DIRECTORY=/app/chroma_db_data
+    volumes:
+      - chromadb_data:/app/chroma_db_data
 
-networks:
-  default:
-    name: jitc_gen_ai_db_network
+volumes:
+  chromadb_data:

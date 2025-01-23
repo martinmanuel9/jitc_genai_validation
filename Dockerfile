@@ -1,31 +1,22 @@
+# Use an official Python image
 FROM python:3.11.9-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    python3-dev \
-    curl \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set up working directory
 WORKDIR /app
 
-# Clone Chroma repository from GitHub
-RUN git clone https://github.com/chroma-core/chroma.git
+# (Optional) Install any system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory to the cloned repository
-WORKDIR /app/chroma
+# Install ChromaDB plus server extras + the tools you need (FastAPI, Uvicorn)
+RUN pip install --no-cache-dir chromadb[server] fastapi uvicorn
 
-# Install Python dependencies
-RUN pip install --upgrade pip \
-    && pip install poetry \
-    && poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
+# Copy only the chromadb subfolder into /app
+COPY ./src/chromadb /app
 
-# Expose the Chroma API port
-EXPOSE 8001
+# Expose port 8000 for our custom server
+EXPOSE 8000
 
-# Command to start Chroma
-CMD ["uvicorn", "chromadb.app:app", "--host", "0.0.0.0", "--port", "8001"]
+# Start our custom server script
+CMD ["python", "start_chromadb.py"]

@@ -4,30 +4,13 @@ version = "0.1.0"
 description = ""
 authors = ["Martin Lopez <78863793+martinmanuel9@users.noreply.github.com>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "3.11.9"
-fastapi = "^0.115.4"
-uvicorn = "^0.32.0"
-farm-haystack = "^1.26.3"
-numpy = "2.1.2"
-huggingface = "^0.0.1"
-rag = "^0.1.0"
-haystack-ai = "^2.6.1"
-datasets = "^3.1.0"
-psycopg2-binary = "^2.9.10"
-haystack = "^0.42"
 chromadb = "^0.6.3"
 
 [[tool.poetry.source]]
 name = "pytorch_cpu"
 url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
-
-
-[[tool.poetry.packages]]
-include = "src"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"

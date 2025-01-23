@@ -1,13 +1,6 @@
 # /app/src/app/services/llm_service.py
 
 import os
-# TODO: need to fix the follow commented out packages there are errors in install
-# import psycopg2
-# from psycopg2.extras import RealDictCursor
-# from haystack.nodes import PromptNode
-# from haystack.pipelines import Pipeline
-# from haystack.document_stores import MilvusDocumentStore
-# from haystack.nodes import DensePassageRetriever
 from openai import OpenAI
 
 class LLMService:
@@ -22,18 +15,6 @@ class LLMService:
             #This is the default and can be omitted
             api_key= self.openai_api_key,
         )
-        # Initialize Milvus Document Store
-        # self.document_store = MilvusDocumentStore(
-        #     host=os.getenv("MILVUS_HOST"),
-        #     port=os.getenv("MILVUS_PORT"),
-        #     index="document_index",
-        #     consistency_level="Session",
-        # )
-        # self.retriever = DensePassageRetriever(document_store=self.document_store)
-        
-        # Initialize Pipeline
-        # self.pipeline = Pipeline()
-        # self.pipeline.add_node(component=self.retriever, name="Retriever", inputs=["Query"])
         # TODO: Add LLaMA node to pipeline
         # # self.pipeline.add_node(component=self.llama_node, name="Generator", inputs=["Retriever"])
 
@@ -61,23 +42,3 @@ class LLMService:
         # Simple combination logic
         return f"LLaMA says: {response1}\nGPT-4 says: {response2}"
 
-    def save_interaction_to_db(self, query, response):
-        # TODO: combine responses and save to PostgreSQL
-        # conn = psycopg2.connect(
-        #     host=os.getenv("POSTGRES_HOST"),
-        #     database=os.getenv("POSTGRES_DB"),
-        #     user=os.getenv("POSTGRES_USER"),
-        #     password=os.getenv("POSTGRES_PASSWORD")
-        # )
-        # cursor = conn.cursor()
-        # cursor.execute(
-        #     """
-        #     INSERT INTO interactions (user_query, model_response)
-        #     VALUES (%s, %s);
-        #     """,
-        #     (query, response)
-        # )
-        # conn.commit()
-        # cursor.close()
-        # conn.close()
-        pass
