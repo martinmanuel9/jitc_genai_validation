@@ -19,4 +19,4 @@ COPY ./src/chromadb /app
 EXPOSE 8000
 
 # Start our custom server script
-CMD ["python", "start_chromadb.py"]
+CMD ["python", "chromadb_main.py"]
