@@ -10,6 +10,25 @@ services:
       - CHROMADB_PERSIST_DIRECTORY=/app/chroma_db_data
     volumes:
       - chromadb_data:/app/chroma_db_data
+  streamlit:
+    build: ./streamlit_app
+    container_name: streamlit_ui
+    ports:
+      - "8501:8501"
+    depends_on:
+      - chromadb
+      - fastapi
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: fastapi_service
+    ports:
+      - "9000:9000"
+    env_file:
+      - .env
+    depends_on:
+      - chromadb
 
 volumes:
   chromadb_data:

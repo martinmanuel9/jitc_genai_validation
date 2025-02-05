@@ -19,6 +19,8 @@ llama-index = "^0.12.14"
 huggingface-hub = "^0.27.1"
 openai = "^1.60.2"
 pytest = "^8.3.4"
+streamlit = "^1.42.0"
+requests = "^2.32.3"
 
 [[tool.poetry.source]]
 name = "pytorch_cpu"

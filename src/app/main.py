@@ -4,9 +4,9 @@ from fastapi import FastAPI
 from routers import chat
 
 app = FastAPI(
-    title="JITC GenAI Validation Chatbot",
+    title="JITC GenAI Conformance Chatbot",
     version="0.1.0",
-    description="A chatbot using GPT-4 and LLaMA with RAG, Milvus, and PostgreSQL"
+    description="A chatbot using GPT-4 and LLaMA with RAG, ChromaDB"
 )
 CHROMADB_URL = "http://localhost:8000"
 app.include_router(chat.router)
@@ -21,4 +21,4 @@ def test_chroma():
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the JITC Validation Chatbot!"}
+    return {"message": "Welcome to the JITC Conformance Chatbot!"}
