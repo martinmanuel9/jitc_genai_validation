@@ -25,17 +25,22 @@ services:
     volumes:
       - ./src/fastapi/pyproject.toml:/app/pyproject.toml
       - ./src/fastapi/poetry.lock:/app/poetry.lock
-
   streamlit:
     build:
-      context: ./src/streamlit_app
-      dockerfile: Dockerfile.streamlit
+      context: .
+      dockerfile: src/streamlit_app/Dockerfile.streamlit
+      args:
+        HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY} 
     container_name: streamlit_ui
     ports:
       - "8501:8501"
     depends_on:
       - chromadb
       - fastapi
+    env_file:
+      - .env  # <-- Load API key at runtime
+    environment:
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_API_KEY} 
     volumes:
       - ./src/streamlit_app/pyproject.toml:/app/pyproject.toml
       - ./src/streamlit_app/poetry.lock:/app/poetry.lock
