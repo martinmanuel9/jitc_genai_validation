@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir chromadb[server] fastapi uvicorn
 
 # Copy only the chromadb subfolder into /app
-COPY ./src/chromadb /app
+COPY . /app
 
 # Expose port 8000 for our custom server
 EXPOSE 8000

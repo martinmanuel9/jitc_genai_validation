@@ -1,7 +1,8 @@
 import requests
 import json
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://chromadb:8000"
+
 
 def test_health():
     """Check that the server is up and /health returns status: ok."""
