@@ -5,22 +5,22 @@ COMPOSE_FILES := $(wildcard *.yml)
 
 # Build the Docker image
 build:
-	docker build -t jitc-genai-validation . --no-cache
+	docker-compose up --build -d
 
 # Start Docker Compose services (Milvus and PostgreSQL)
 compose-up:
 	docker-compose up -d
 
 # Stop Docker Compose services
-compose-down:
-	docker-compose down --rmi all
+# compose-down:
+# 	docker-compose down --rmi all
 
 # Clean up Docker images
 clean:
 	docker rmi jitc-genai-validation
 
 # Build and run in one command
-all: build compose-up status 
+all: build status 
 
 # Remove Docker container and image
 remove:

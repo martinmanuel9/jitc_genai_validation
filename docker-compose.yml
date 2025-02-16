@@ -15,11 +15,14 @@ services:
     build:
       context: ./src/fastapi
       dockerfile: Dockerfile.fastapi
-    container_name: fastapi_service
+    container_name: fastapi
     ports:
       - "9000:9000"
     env_file:
-      - .env
+      - .env  
+    environment:
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_API_KEY}
+      - OPEN_AI_API_KEY=${OPEN_AI_API_KEY}
     depends_on:
       - chromadb
     volumes:
@@ -38,7 +41,7 @@ services:
       - chromadb
       - fastapi
     env_file:
-      - .env  # <-- Load API key at runtime
+      - .env  
     environment:
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_API_KEY} 
     volumes:

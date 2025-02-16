@@ -1,21 +1,29 @@
-# /app/src/app/routers/chat.py
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.llm_service import LLMService
 
 router = APIRouter()
+llm_service = LLMService()
 
 class ChatRequest(BaseModel):
     query: str
 
+class ComplianceRequest(BaseModel):
+    data_sample: str
+    standards: list[str]
+
 @router.post("/chat")
 async def chat(request: ChatRequest):
-    llm_service = LLMService()
     try:
-        response = llm_service.generate_response(request.query)
-        # Save interaction to PostgreSQL
-        # llm_service.save_interaction_to_db(request.query, response)
+        response = llm_service.query_gpt4(request.query)
         return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/compliance")
+async def compliance(request: ComplianceRequest):
+    try:
+        is_compliant = llm_service.compliance_check(request.data_sample, request.standards)
+        return {"compliant": is_compliant}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

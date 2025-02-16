@@ -1,44 +1,113 @@
-# /app/src/app/services/llm_service.py
-
 import os
-from openai import OpenAI
+import torch
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from langchain_openai import ChatOpenAI
+from langchain.schema import AIMessage, HumanMessage
 
 class LLMService:
     def __init__(self):
-        # Initialize LLMs
-        # self.llama_node = PromptNode(model_name_or_path="path/to/llama/model")
+        """Initialize LLMs (OpenAI & LLaMA)."""
         self.openai_api_key = os.getenv("OPEN_AI_API_KEY")
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key not found. Set OPEN_AI_API_KEY environment variable.")
-        
-        self.open_ai_client = OpenAI(
-            #This is the default and can be omitted
-            api_key= self.openai_api_key,
-        )
-        # TODO: Add LLaMA node to pipeline
-        # # self.pipeline.add_node(component=self.llama_node, name="Generator", inputs=["Retriever"])
+        self.huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
-    def generate_response(self, query):
-        # TODO:Use RAG pipeline
-        # result = self.pipeline.run(query=query)
-        # TODO: Use LLaMA via Haystack
-        # llama_response = result['answers'][0].answer if result['answers'] else "No answer found."
-        
-        # Use GPT-4 via OpenAI API
-        openai_response = self.query_gpt4(query)
-        
-        # Combine responses
-        # final_response = self.combine_responses(llama_response, openai_response)
-        return openai_response # final_response
+        if not self.openai_api_key:
+            raise ValueError("OpenAI API key not found. Set OPEN_AI_API_KEY in .env.")
+        if not self.huggingface_api_key:
+            raise ValueError("Hugging Face API key not found. Set HUGGINGFACE_API_KEY in .env.")
+
+        # Initialize OpenAI GPT-4 via LangChain
+        self.openai_client = ChatOpenAI(
+            model_name="gpt-4o",
+            openai_api_key=self.openai_api_key
+        )
+
+        # Load LLaMA Model on CPU
+        self.model_name = "meta-llama/Llama-2-13b-chat-hf"
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name,
+            token=self.huggingface_api_key
+        )
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_name,
+            token=self.huggingface_api_key,
+            device_map="cpu",
+            torch_dtype=torch.float16  # Run in FP16 mode
+        )
+
 
     def query_gpt4(self, prompt):
-        response = self.open_ai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
+        """Query GPT-4 using OpenAI API."""
+        response = self.openai_client([HumanMessage(content=prompt)])
+        return response.content.strip()
+
+    def query_llama(self, prompt):
+        """Query LLaMA using Hugging Face Transformers on CPU."""
+        inputs = self.tokenizer(prompt, return_tensors="pt").to("cpu")  # Ensure execution on CPU
+        outputs = self.model.generate(**inputs, max_new_tokens=100)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    def compliance_check(self, data_sample, standards):
+        """Run compliance check using multiple LLMs."""
+        agents = [ComplianceAgent(section, f"Section {i + 1}") for i, section in enumerate(standards)]
+        compliance_results = self.run_parallel_compliance_checks(agents, data_sample)
+        if all(compliance_results.values()):
+            return True  # All agents agree
+
+        # Debate non-compliant sections
+        debate_results = self.run_debate(agents, compliance_results, data_sample)
+        for idx, compliant in compliance_results.items():
+            if idx in debate_results:
+                compliance_results[idx] = debate_results[idx]
+
+        return all(compliance_results.values())  # Final decision
+
+    def run_parallel_compliance_checks(self, agents, data_sample):
+        """Run compliance checks in parallel."""
+        results = {}
+        with ThreadPoolExecutor() as executor:
+            futures = {executor.submit(agent.verify_compliance, data_sample): i for i, agent in enumerate(agents)}
+            for future in as_completed(futures):
+                idx = futures[future]
+                results[idx] = future.result()
+        return results
+
+    def run_debate(self, agents, compliance_results, data_sample):
+        """Run debates on compliance decisions."""
+        debate_results = {}
+        non_compliant_indices = [idx for idx, compliant in compliance_results.items() if not compliant]
+
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for idx in non_compliant_indices:
+                peer_agent = agents[non_compliant_indices[(non_compliant_indices.index(idx) + 1) % len(non_compliant_indices)]]
+                futures.append((idx, executor.submit(peer_agent.debate_compliance, compliance_results[idx], data_sample)))
+
+            for idx, future in futures:
+                debate_results[idx] = future.result()
+        return debate_results
+
+
+class ComplianceAgent:
+    """Agent for verifying compliance with standards using GPT-4."""
+    def __init__(self, section_text, section_name):
+        self.section_text = section_text
+        self.section_name = section_name
+        self.llm = ChatOpenAI(
+            model_name="gpt-4",
+            openai_api_key=os.getenv("OPEN_AI_API_KEY")
         )
-        return response.choices[0].message.content
 
-    def combine_responses(self, response1, response2):
-        # Simple combination logic
-        return f"LLaMA says: {response1}\nGPT-4 says: {response2}"
+    def verify_compliance(self, data_sample):
+        """Verify if data complies with a standard section."""
+        system_prompt = f"You are an expert verifying data compliance."
+        user_prompt = f"Standard Section:\n{self.section_text}\n\nDoes this data comply? Respond 'Yes' or 'No'.\nData: {data_sample}"
 
+        response = self.llm([AIMessage(content=system_prompt), HumanMessage(content=user_prompt)])
+        return response.content.strip().lower() == "yes"
+
+    def debate_compliance(self, peer_response, data_sample):
+        """Debate compliance with another agent."""
+        debate_prompt = f"The agent for {self.section_name} found the data {'compliant' if peer_response else 'non-compliant'}.\nDo you agree? Respond 'Yes' or 'No'."
+        response = self.llm([HumanMessage(content=debate_prompt)])
+        return response.content.strip().lower() == "yes"
