@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 # FastAPI endpoint for compliance checking
-LLM_API = "http://fastapi:9000"
+LLM_API = "http://fastapi:9020"
 
 st.set_page_config(page_title="Compliance Checker", layout="wide")
 

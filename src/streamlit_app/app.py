@@ -3,7 +3,7 @@ import requests
 from utils import fetch_collections, store_pdfs_in_chromadb, list_all_chunks_with_scores
 
 # FastAPI endpoint
-CHROMADB_API = "http://chromadb:8000"
+CHROMADB_API = "http://chromadb:8020"
 
 st.set_page_config(page_title="Document Management", layout="wide")
 

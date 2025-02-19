@@ -1,11 +1,24 @@
 services:
+  postgres:
+    image: postgres:17
+    container_name: postgres_db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: rag_memory
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
   chromadb:
     build:
       context: ./src/chromadb
       dockerfile: Dockerfile
     container_name: chromadb
     ports:
-      - "8000:8000"
+      - "8020:8020"
     environment:
       - CHROMADB_PERSIST_DIRECTORY=/app/chroma_db_data
     volumes:
@@ -17,17 +30,21 @@ services:
       dockerfile: Dockerfile.fastapi
     container_name: fastapi
     ports:
-      - "9000:9000"
+      - "9020:9020"
     env_file:
       - .env  
     environment:
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_API_KEY}
       - OPEN_AI_API_KEY=${OPEN_AI_API_KEY}
+      - DATABASE_URL=postgresql://user:password@postgres_db:5432/rag_memory
     depends_on:
       - chromadb
+      - postgres
+      - llama3
     volumes:
       - ./src/fastapi/pyproject.toml:/app/pyproject.toml
       - ./src/fastapi/poetry.lock:/app/poetry.lock
+
   streamlit:
     build:
       context: .
@@ -48,6 +65,18 @@ services:
       - ./src/streamlit_app/pyproject.toml:/app/pyproject.toml
       - ./src/streamlit_app/poetry.lock:/app/poetry.lock
 
+  llama3:
+    image: ollama/ollama
+    container_name: llama3
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - llama3_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c", "ollama serve"]
+
 
 volumes:
   chromadb_data:
+  llama3_data:
+  pg_data:

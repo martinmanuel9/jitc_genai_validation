@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir chromadb[server] fastapi uvicorn
 COPY . /app
 
 # Expose port 8000 for our custom server
-EXPOSE 8000
+EXPOSE 8020
 
 # Start our custom server script
 CMD ["python", "chromadb_main.py"]

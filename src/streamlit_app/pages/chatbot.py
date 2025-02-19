@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 
 # FastAPI endpoint
-LLM_API = "http://fastapi:9000/chat"
+LLM_API = "http://fastapi:9020/chat"
 
 st.set_page_config(page_title="Chatbot", layout="wide")
 
