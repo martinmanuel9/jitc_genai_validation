@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer
 import requests
 
 # ChromaDB API endpoint
-CHROMADB_API = "http://chromadb:8000"
+CHROMADB_API = "http://chromadb:8020"
 
 # Load Sentence Transformer model
 embedding_model = SentenceTransformer('multi-qa-mpnet-base-dot-v1')

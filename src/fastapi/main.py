@@ -9,7 +9,7 @@ app = FastAPI(
     version="0.1.0",
     description="A chatbot using GPT-4 and LLaMA with RAG, ChromaDB"
 )
-CHROMADB_URL = "http://chromadb:8000"
+CHROMADB_URL = "http://chromadb:8020"
 app.include_router(chat.router)
 
 @app.get("/test-chroma")
