@@ -27,6 +27,8 @@ pymupdf = "^1.25.3"
 python-docx = "^1.1.2"
 sentence-transformers = "^3.4.1"
 langchain-openai = "^0.3.6"
+sqlalchemy = "^2.0.38"
+psycopg2-binary = "^2.9.10"
 
 [[tool.poetry.source]]
 name = "pytorch_cpu"
