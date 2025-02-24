@@ -50,6 +50,23 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/chat-history")
+def get_chat_history(db: Session = Depends(get_db)):
+    """
+    Retrieve all past chats for debugging/demo.
+    """
+    records = db.query(ChatHistory).all()
+    # For a production use case, consider pagination or filtering.
+    return [
+        {
+            "id": record.id,
+            "user_query": record.user_query,   # <-- user’s prompt
+            "response": record.response,       # <-- LLM’s response
+            "timestamp": record.timestamp
+        }
+        for record in records
+    ]
 
 
 @router.post("/compliance")
