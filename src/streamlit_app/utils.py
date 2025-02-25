@@ -4,6 +4,7 @@ import tempfile
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 import requests
+import time
 
 # ChromaDB API endpoint
 CHROMADB_API = "http://chromadb:8020"
@@ -13,9 +14,15 @@ embedding_model = SentenceTransformer('multi-qa-mpnet-base-dot-v1')
 
 # Fetch existing collections from ChromaDB
 def fetch_collections():
-    response = requests.get(f"{CHROMADB_API}/collections")
-    if response.status_code == 200:
-        return response.json()
+    """Fetch list of available collections from ChromaDB with retries."""
+    for i in range(5):  # Try 5 times
+        try:
+            response = requests.get(f"{CHROMADB_API}/collections")
+            if response.status_code == 200:
+                return response.json()["collections"]
+        except requests.ConnectionError:
+            print(f"ChromaDB not ready, retrying {i+1}/5...")
+            time.sleep(5)
     return []
 
 # Extract and chunk text from PDFs

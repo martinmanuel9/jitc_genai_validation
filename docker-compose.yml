@@ -11,6 +11,11 @@ services:
       POSTGRES_DB: rag_memory
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d rag_memory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   chromadb:
     build:
@@ -24,6 +29,16 @@ services:
     volumes:
       - chromadb_data:/app/chroma_db_data
 
+  llama3:
+    image: ollama/ollama
+    container_name: llama3
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - llama3_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-c", "ollama serve"]
+
   fastapi:
     build:
       context: ./src/fastapi
@@ -36,10 +51,11 @@ services:
     environment:
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_API_KEY}
       - OPEN_AI_API_KEY=${OPEN_AI_API_KEY}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - DATABASE_URL=postgresql://user:password@postgres_db:5432/rag_memory
     depends_on:
+      - postgres 
       - chromadb
-      - postgres
       - llama3
     volumes:
       - ./src/fastapi/pyproject.toml:/app/pyproject.toml
@@ -55,8 +71,11 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - chromadb
       - fastapi
+      - chromadb
+      - llama3
+      - postgres
+
     env_file:
       - .env  
     environment:
@@ -64,17 +83,6 @@ services:
     volumes:
       - ./src/streamlit_app/pyproject.toml:/app/pyproject.toml
       - ./src/streamlit_app/poetry.lock:/app/poetry.lock
-
-  llama3:
-    image: ollama/ollama
-    container_name: llama3
-    restart: always
-    ports:
-      - "11434:11434"
-    volumes:
-      - llama3_data:/root/.ollama
-    entrypoint: ["/bin/sh", "-c", "ollama serve"]
-
 
 volumes:
   chromadb_data:

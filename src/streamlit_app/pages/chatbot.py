@@ -1,27 +1,48 @@
 import streamlit as st
 import requests
+from utils import fetch_collections
 
 # FastAPI endpoints
-CHAT_ENDPOINT = "http://fastapi:9020/chat"
 HISTORY_ENDPOINT = "http://fastapi:9020/chat-history"
+LLM_API = "http://fastapi:9020/chat"
+RAG_API = "http://fastapi:9020/chat-rag"
+CHROMADB_API = "http://chromadb:8020"
 
 st.set_page_config(page_title="Chatbot", layout="wide")
-st.title("JITC GenAI Chatbot")
 
-# ---- CHATBOT INTERFACE ----
-st.header("Enter Your Query Below")
+st.title("JITC GenAI Chatbot with RAG")
+
+# Fetch collections from ChromaDB
+collections = fetch_collections()
+
+# Let user choose "Direct GPT-4" vs. "GPT-4 with Retrieval"
+mode = st.selectbox("Select Mode:", ["Direct GPT-4", "RAG (Chroma + GPT-4)"])
+
+# Collection selection for RAG mode
+collection_name = None
+if mode == "RAG (Chroma + GPT-4)" and collections:
+    collection_name = st.selectbox("Select a ChromaDB Collection:", collections)
+
 user_input = st.text_input("Ask me something:")
 
-if st.button("Get Response") or (user_input and user_input != st.session_state.get('previous_input', '')):
+if st.button("Get Response"):
     if user_input:
-        st.session_state['previous_input'] = user_input
-
-        response = requests.post(CHAT_ENDPOINT, json={"query": user_input})
-        if response.status_code == 200:
-            st.success("Response:")
-            st.write(response.json()["response"])
+        if mode == "RAG (Chroma + GPT-4)" and not collection_name:
+            st.error("Please select a collection for RAG mode.")
         else:
-            st.error("Error: " + response.json()["detail"])
+            api_url = RAG_API if mode == "RAG (Chroma + GPT-4)" else LLM_API
+            payload = {"query": user_input}
+
+            if mode == "RAG (Chroma + GPT-4)":
+                payload["collection_name"] = collection_name  # Include collection
+
+            response = requests.post(api_url, json=payload)
+
+            if response.status_code == 200:
+                st.success("Response:")
+                st.write(response.json()["response"])
+            else:
+                st.error("Error: " + response.text)
 
 # ---- LOAD CHAT HISTORY ----
 st.header("Chat History")
@@ -29,7 +50,7 @@ if st.button("Load Chat History"):
     try:
         response = requests.get(HISTORY_ENDPOINT)
         if response.status_code == 200:
-            data = response.json()  # This should be a list of chat records
+            data = response.json()
             if not data:
                 st.info("No chat history found.")
             else:

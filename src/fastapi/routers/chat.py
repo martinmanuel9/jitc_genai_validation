@@ -1,23 +1,27 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from services.llm_service import LLMService
-
 from sqlalchemy.orm import Session
 from services.database import SessionLocal
 from services.rag_service import ChatHistory
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from services.rag_service import RAGService
 
+app = FastAPI()
+rag_service = RAGService()
 router = APIRouter()
 llm_service = LLMService()
 
-
+class RAGQueryRequest(BaseModel):
+    query: str
+    collection_name: str
 class ChatRequest(BaseModel):
     query: str
-
 
 class ComplianceRequest(BaseModel):
     data_sample: str
     standards: list[str]
-
 
 # Dependency to get DB session
 def get_db():
@@ -31,22 +35,29 @@ def get_db():
 @router.post("/chat")
 async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     """
-    Endpoint for user to send a chat query.
+    This endpoint calls GPT-4 with no retrieval.
     """
     try:
-        # 1) Get response from LLM
-        response = llm_service.query_gpt4(request.query)
-        
-        # 2) Save the request/response pair in the database
+        user_prompt = request.query
+        response = llm_service.query_gpt4(user_prompt)
+
+        # Save to DB
         chat_record = ChatHistory(
-            user_query=request.query,
+            user_query=user_prompt,
             response=response
         )
         db.add(chat_record)
         db.commit()
         db.refresh(chat_record)
 
-        # 3) Return the LLM response
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat-rag")
+def chat_with_rag(request: RAGQueryRequest):
+    try:
+        response = rag_service.query(request.query, request.collection_name)
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

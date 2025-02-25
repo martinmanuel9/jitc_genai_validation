@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from langchain_openai import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage
-
+from services.rag_service import RAGService
 class LLMService:
     def __init__(self):
-        """Initialize LLMs (OpenAI & LLaMA)."""
+        """Initialize LLMs (OpenAI & LLaMA) + RAG service."""
         self.openai_api_key = os.getenv("OPEN_AI_API_KEY")
         self.huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
@@ -18,7 +18,7 @@ class LLMService:
 
         # Initialize OpenAI GPT-4 via LangChain
         self.openai_client = ChatOpenAI(
-            model_name="gpt-4o",
+            model_name="gpt-4o",  # your custom model name if relevant
             openai_api_key=self.openai_api_key
         )
 
@@ -32,20 +32,33 @@ class LLMService:
             self.model_name,
             token=self.huggingface_api_key,
             device_map="cpu",
-            torch_dtype=torch.float16  # Run in FP16 mode
+            torch_dtype=torch.float16
         )
 
+        # Initialize the RAG service
+        self.rag_service = RAGService()
 
     def query_gpt4(self, prompt):
-        """Query GPT-4 using OpenAI API."""
-        response = self.openai_client([HumanMessage(content=prompt)])
+        """Query GPT-4 using OpenAI API (no retrieval)."""
+        response = self.openai_client.invoke([HumanMessage(content=prompt)])
         return response.content.strip()
 
     def query_llama(self, prompt):
-        """Query LLaMA using Hugging Face Transformers on CPU."""
-        inputs = self.tokenizer(prompt, return_tensors="pt").to("cpu")  # Ensure execution on CPU
+        """Query LLaMA using Hugging Face Transformers on CPU (no retrieval)."""
+        inputs = self.tokenizer(prompt, return_tensors="pt").to("cpu")
         outputs = self.model.generate(**inputs, max_new_tokens=100)
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    def query_rag_gpt4(self, user_query):
+        """
+        Query your Chroma-based RAG pipeline with GPT-4 as the LLM.
+        Returns a final answer with retrieved context.
+        """
+        return self.rag_service.query(user_query)
+
+    # -----------
+    # MULTI-AGENT COMPLIANCE
+    # -----------
 
     def compliance_check(self, data_sample, standards):
         """Run compliance check using multiple LLMs."""
