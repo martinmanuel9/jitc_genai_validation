@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from services.database import SessionLocal
 from services.llm_service import LLMService
 from services.rag_service import RAGService, ChatHistory
+from fastapi import FastAPI
+from services.database import init_db
+
 
 # Initialize FastAPI & services
 app = FastAPI()
@@ -30,6 +33,10 @@ class ChatRequest(BaseModel):
 class ComplianceRequest(BaseModel):
     data_sample: str
     standards: list[str]
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 # ---- Chat Endpoints ----
 @router.post("/chat")

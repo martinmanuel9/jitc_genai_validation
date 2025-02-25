@@ -12,18 +12,25 @@ CHROMADB_API = "http://chromadb:8020"
 # Load Sentence Transformer model
 embedding_model = SentenceTransformer('multi-qa-mpnet-base-dot-v1')
 
-# Fetch existing collections from ChromaDB
+
 def fetch_collections():
     """Fetch list of available collections from ChromaDB with retries."""
     for i in range(5):  # Try 5 times
         try:
             response = requests.get(f"{CHROMADB_API}/collections")
             if response.status_code == 200:
-                return response.json()["collections"]
+                data = response.json()
+                # If data is a dict with a "collections" key, return that.
+                # Otherwise, assume data is directly the list of collections.
+                if isinstance(data, dict) and "collections" in data:
+                    return data["collections"]
+                else:
+                    return data
         except requests.ConnectionError:
             print(f"ChromaDB not ready, retrying {i+1}/5...")
             time.sleep(5)
     return []
+
 
 # Extract and chunk text from PDFs
 def extract_and_chunk_text_from_pdf(pdf_path, max_chunk_size=512):

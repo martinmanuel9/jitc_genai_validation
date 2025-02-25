@@ -70,4 +70,5 @@ class RAGService:
             )
             retriever = self.vectorstore.as_retriever()
 
-        return self.rag_chain.invoke({"input": user_query})
+        return self.rag_chain.invoke({"query": user_query})
+
