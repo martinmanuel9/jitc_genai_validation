@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+import torch
+torch.classes.__path__ = [] 
 
 # FastAPI endpoint for compliance checking
 LLM_API = "http://fastapi:9020"

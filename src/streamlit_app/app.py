@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 from utils import fetch_collections, store_pdfs_in_chromadb, list_all_chunks_with_scores
+import torch
+torch.classes.__path__ = [] 
 
 
 # FastAPI endpoint

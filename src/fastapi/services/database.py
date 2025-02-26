@@ -1,9 +1,10 @@
 import os
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from datetime import datetime
 
 # Pull DATABASE_URL from environment. Docker Compose sets this as:
 # DATABASE_URL=postgresql://user:password@postgres_db:5432/rag_memory
@@ -22,12 +23,13 @@ for i in range(5):
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+class ChatHistory(Base):
+    __tablename__ = "chat_history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_query = Column(String)
+    response = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow())
 
 def init_db():
-    """
-    Import models so that they are registered with Base.metadata, then create all tables.
-    """
-    # Import your model(s) from the rag_service module
-    from services.rag_service import ChatHistory
-    # Create all tables defined in your models
+    """Create all tables."""
     Base.metadata.create_all(bind=engine)
