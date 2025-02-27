@@ -140,36 +140,37 @@ def edit_collection_name(old_name: str = Query(...), new_name: str = Query(...))
     return {"old_name": old_name, "new_name": new_name}
 
 ### Document Endpoints ###
-
 class DocumentAddRequest(BaseModel):
     collection_name: str
     documents: list[str]
     ids: list[str]
+    embeddings: list[list[float]] = None  
+    metadatas: list[dict] = None           
 
 @app.post("/documents/add")
 def add_documents(req: DocumentAddRequest):
-    # 1. Check if it actually exists
+    # Check if the collection exists
     if req.collection_name not in chroma_client.list_collections():
         raise HTTPException(
             status_code=404,
             detail=f"Collection '{req.collection_name}' not found."
         )
     
-    # 2. Now safe to call get_collection() (won’t create a new one)
+    # Retrieve the collection
     collection = chroma_client.get_collection(req.collection_name)
     
-    # 3. Add documents
+    # Add documents along with embeddings and metadatas
     collection.add(
         documents=req.documents,
-        ids=req.ids
-        # optionally, embeddings=... , metadatas=...
+        ids=req.ids,
+        embeddings=req.embeddings,
+        metadatas=req.metadatas
     )
     return {
         "collection": req.collection_name,
         "added_count": len(req.documents),
         "ids": req.ids
     }
-
 class DocumentRemoveRequest(BaseModel):
     collection_name: str
     ids: list[str]
@@ -268,7 +269,32 @@ def list_documents(collection_name: str = Query(...)):
     docs = collection.get()
     return docs  # Returns documents and associated metadata
 
+class DocumentQueryRequest(BaseModel):
+    collection_name: str
+    query_embeddings: list[list[float]]
+    n_results: int = 5
+    include: list[str] = ["documents", "metadatas", "distances"]
 
+@app.post("/documents/query")
+def query_documents(req: DocumentQueryRequest):
+    # Check if the collection exists first.
+    existing_collections = chroma_client.list_collections()
+    if req.collection_name not in existing_collections:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Collection '{req.collection_name}' not found."
+        )
+
+    # Retrieve the collection.
+    collection = chroma_client.get_collection(req.collection_name)
+
+    # Perform the query using the provided embeddings and parameters.
+    query_result = collection.query(
+        query_embeddings=req.query_embeddings,
+        n_results=req.n_results,
+        include=req.include
+    )
+    return query_result
 
 ### Run with Uvicorn if called directly ###
 if __name__ == "__main__":

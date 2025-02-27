@@ -16,6 +16,9 @@ COPY pyproject.toml poetry.lock ./
 # Install dependencies via Poetry
 RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi
 
+# Run OpenAI migration
+RUN python -m openai migrate
+
 # Copy Streamlit app files
 COPY src/streamlit_app /app
 

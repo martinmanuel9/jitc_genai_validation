@@ -1,15 +1,15 @@
 import os
-import fitz
+import re
 import tempfile
+import time
+import requests
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
-import requests
-import time
 
 # ChromaDB API endpoint
 CHROMADB_API = "http://chromadb:8020"
 
-# Load Sentence Transformer model
+# Load Sentence Transformer model (multi-qa-mpnet-base-dot-v1 outputs 768-d vectors)
 embedding_model = SentenceTransformer('multi-qa-mpnet-base-dot-v1')
 
 
@@ -20,8 +20,6 @@ def fetch_collections():
             response = requests.get(f"{CHROMADB_API}/collections")
             if response.status_code == 200:
                 data = response.json()
-                # If data is a dict with a "collections" key, return that.
-                # Otherwise, assume data is directly the list of collections.
                 if isinstance(data, dict) and "collections" in data:
                     return data["collections"]
                 else:
@@ -32,37 +30,29 @@ def fetch_collections():
     return []
 
 
-# Extract and chunk text from PDFs
-def extract_and_chunk_text_from_pdf(pdf_path, max_chunk_size=512):
-    """Extracts text from a PDF file and splits it into chunks of `max_chunk_size` tokens."""
+def extract_sections_from_pdf(pdf_path):
+    """
+    Extract full text from a PDF and split it into sections based on headings.
+    This regex assumes section headings start with a number followed by a dot and a space.
+    Adjust the regex as needed for your documents. Change this so that we can do it based on sections of standards. 
+    """
     reader = PdfReader(pdf_path)
-    text = ""
-    
+    full_text = ""
     for page in reader.pages:
-        extracted_text = page.extract_text()
-        if extracted_text:
-            text += extracted_text + "\n"
+        text = page.extract_text()
+        if text:
+            full_text += text + "\n"
+    
+    # Split text into sections using regex: look for a newline that is followed by one or more digits, a period, and a space.
+    sections = re.split(r'\n(?=\d+\.\s)', full_text)
+    # Clean up sections
+    sections = [section.strip() for section in sections if section.strip()]
+    return sections
 
-    # Split text into chunks
-    sentences = text.split(". ")
-    chunks = []
-    current_chunk = ""
 
-    for sentence in sentences:
-        if len(current_chunk.split()) + len(sentence.split()) <= max_chunk_size:
-            current_chunk += sentence + ". "
-        else:
-            chunks.append(current_chunk.strip())
-            current_chunk = sentence + ". "
-
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-
-    return chunks
-
-# Store PDFs in ChromaDB
 def store_pdfs_in_chromadb(uploaded_files, collection_name, distance_metric="cosine"):
-    """Stores PDF documents in ChromaDB with generated embeddings."""
+    """Stores PDF documents in ChromaDB by splitting them into sections based on headings."""
+    # Ensure the collection exists
     requests.post(f"{CHROMADB_API}/collection/create", params={"collection_name": collection_name})
 
     for uploaded_file in uploaded_files:
@@ -71,26 +61,32 @@ def store_pdfs_in_chromadb(uploaded_files, collection_name, distance_metric="cos
             temp_pdf.write(uploaded_file.getvalue())
             temp_pdf_path = temp_pdf.name
 
-        # Extract text chunks
-        chunks = extract_and_chunk_text_from_pdf(temp_pdf_path)
+        # Extract sections from the PDF
+        sections = extract_sections_from_pdf(temp_pdf_path)
+        if not sections:
+            # Fallback: if no sections were found, store the entire document as one section.
+            with open(temp_pdf_path, 'r', encoding="utf8") as f:
+                sections = [f.read()]
 
-        # Generate embeddings
-        embeddings = embedding_model.encode(chunks).tolist()
+        # Generate embeddings for each section
+        embeddings = embedding_model.encode(sections).tolist()
+        print("Embedding dimension:", len(embeddings[0]))  # Should print 768
 
         # Prepare metadata and IDs
-        metadatas = [{"document_name": uploaded_file.name} for _ in range(len(chunks))]
-        ids = [f"{uploaded_file.name}_chunk_{i}" for i in range(len(chunks))]
+        metadatas = [{"document_name": uploaded_file.name} for _ in range(len(sections))]
+        ids = [f"{uploaded_file.name}_section_{i}" for i in range(len(sections))]
 
-        # Insert into ChromaDB
+        # Build payload including the embeddings
         payload = {
             "collection_name": collection_name,
-            "documents": chunks,
+            "documents": sections,
             "ids": ids,
-            "metadatas": metadatas
+            "metadatas": metadatas,
+            "embeddings": embeddings
         }
         response = requests.post(f"{CHROMADB_API}/documents/add", json=payload)
 
-        # Cleanup
+        # Cleanup temporary file
         os.remove(temp_pdf_path)
 
         if response.status_code == 200:
@@ -98,12 +94,11 @@ def store_pdfs_in_chromadb(uploaded_files, collection_name, distance_metric="cos
         else:
             print(f"Error storing {uploaded_file.name}: {response.json()}")
 
-# List all stored chunks in a collection with metadata
+
 def list_all_chunks_with_scores(collection_name, query_text=None):
-    """Lists all stored chunks in a ChromaDB collection with optional query scores."""
-    # First get all documents
+    """Lists all stored document sections in a ChromaDB collection with optional query scores."""
+    # First, get all documents
     response = requests.get(f"{CHROMADB_API}/documents", params={"collection_name": collection_name})
-    
     if response.status_code != 200:
         print(f"Error fetching documents: {response.text}")
         return []
@@ -122,7 +117,7 @@ def list_all_chunks_with_scores(collection_name, query_text=None):
             "include": ["metadatas", "distances"]
         }
         score_response = requests.post(
-            f"{CHROMADB_API}/documents/query", 
+            f"{CHROMADB_API}/documents/query",
             json={"collection_name": collection_name, **query_payload}
         )
         if score_response.status_code == 200:
@@ -138,12 +133,11 @@ def list_all_chunks_with_scores(collection_name, query_text=None):
             "Chunk ID": f"`{doc_id}`",
             "Document": f">{doc_text[:250] + '...' if len(doc_text) > 250 else doc_text}",
             "Metadata": f"**{(metadata or {}).get('document_name', 'Unknown')}**",
-            "Score": scores_dict.get(doc_id, "N/A")  # Add score if query was provided
+            "Score": scores_dict.get(doc_id, "N/A")
         }
         for doc_id, doc_text, metadata in zip(
-            docs["ids"], 
-            docs["documents"], 
+            docs["ids"],
+            docs["documents"],
             docs.get("metadatas", [{}] * len(docs["ids"]))
         )
     ]
-

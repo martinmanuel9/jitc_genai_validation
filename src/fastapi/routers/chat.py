@@ -45,7 +45,7 @@ async def chat_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
         user_prompt = request.query
         collection_name = request.collection_name
 
-        # Pass the db session to rag_service.query()
+        # Pass the db session to rag_service.query() if needed for further logging.
         response = rag_service.query(user_prompt, collection_name, db)
         return {"response": response}
     except Exception as e:
