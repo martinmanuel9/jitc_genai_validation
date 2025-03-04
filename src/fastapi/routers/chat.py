@@ -58,7 +58,9 @@ async def chat_rag_gpt4(request: RAGQueryRequest, db: Session = Depends(get_db))
         collection_name = request.collection_name
 
         # Pass the db session to rag_service.query() if needed for further logging.
-        response = rag_service.query(user_prompt, collection_name, db)
+        response = rag_service.query_gpt(user_prompt, collection_name, db)
+        db.add(ChatHistory(user_query=request.query, response=response))
+        db.commit()
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"500: RAG query failed: {str(e)}")
@@ -72,6 +74,8 @@ async def chat_rag_llama(request: RAGQueryRequest, db: Session = Depends(get_db)
         user_prompt = request.query
         collection_name = request.collection_name
         response = rag_service.query_llama(user_prompt, collection_name, db)
+        db.add(ChatHistory(user_query=request.query, response=response))
+        db.commit()
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"500: RAG query failed: {str(e)}")

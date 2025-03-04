@@ -25,9 +25,9 @@ collections = fetch_collections()
 # Let user choose between "Direct GPT-4" and "GPT-4 with Retrieval"
 mode = st.selectbox("Select Mode:", ["Direct GPT-4", "RAG (Chroma + GPT-4)", "Meta Llama", "RAG (Meta Llama)"])
 
-# Collection selection for RAG mode
+# Collection selection for RAG modes
 collection_name = None
-if mode == "RAG (Chroma + GPT-4)" and collections:
+if mode in ["RAG (Chroma + GPT-4)", "RAG (Meta Llama)"] and collections:
     collection_name = st.selectbox("Select a ChromaDB Collection:", collections)
 
 user_input = st.text_input("Ask me something:")
@@ -46,9 +46,14 @@ if st.button("Get Response"):
                 api_url = LLAMA_API
             else:
                 api_url = GPT4_API
+                
             payload = {"query": user_input}
-            if mode.startswith("RAG"):
-                payload["collection_name"] = collection_name
+            
+            if mode in ["RAG (Chroma + GPT-4)", "RAG (Meta Llama)"]:
+                if not collection_name:
+                    st.error("Please select a collection for RAG mode.")
+                    st.stop()  
+                payload["collection_name"] = collection_name 
 
             try:
                 response = requests.post(api_url, json=payload)

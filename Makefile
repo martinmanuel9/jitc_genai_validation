@@ -5,11 +5,11 @@ COMPOSE_FILES := $(wildcard *.yml)
 
 # Build the Docker image
 build:
-	docker-compose up --build -d
+	docker-compose up --build || docker compose up --build
 
 # Start Docker Compose services (Milvus and PostgreSQL)
 compose-up:
-	docker-compose up -d
+	docker-compose up || docker compose up
 
 # Stop Docker Compose services
 # compose-down:
@@ -29,24 +29,8 @@ remove:
 	docker rmi jitc-genai-validation
 
 # Stop and remove all containers and images
-clean-all: compose-down remove
+clean-all: compose-down --rmi all || docker compose down --rmi all
 
-env-up:
-	@for file in $(COMPOSE_FILES); do \
-		echo "Starting services in $$file"; \
-		docker-compose -f $$file up -d; \
-	done
-	bash standalone_embed.sh start
-	@make status
-	@echo "Waiting for services to start..."
-	
-env-down:
-	@for file in $(COMPOSE_FILES); do \
-		echo "Stopping and removing containers in $$file"; \
-		docker-compose -f $$file down --remove-orphans; \
-		docker image prune --all; \
-	done
-	@make status
 
 status:
 	@echo "-----------------------------------------------------------------------------------------------------------------------------------------"

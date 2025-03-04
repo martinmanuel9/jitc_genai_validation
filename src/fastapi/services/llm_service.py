@@ -24,17 +24,17 @@ class LLMService:
         )
 
         # Load LLaMA Model on CPU
-        self.model_name = "meta-llama/Llama-2-13b-chat-hf"
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name,
-            token=self.huggingface_api_key
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            token=self.huggingface_api_key,
-            device_map="cpu",
-            torch_dtype=torch.float16
-        )
+        # self.model_name = "meta-llama/Llama-2-13b-chat-hf"
+        # self.tokenizer = AutoTokenizer.from_pretrained(
+        #     self.model_name,
+        #     token=self.huggingface_api_key
+        # )
+        # self.model = AutoModelForCausalLM.from_pretrained(
+        #     self.model_name,
+        #     token=self.huggingface_api_key,
+        #     device_map="cpu",
+        #     torch_dtype=torch.float16
+        # )
 
         # Initialize the RAG service
         self.rag_service = RAGService()
@@ -53,17 +53,27 @@ class LLMService:
 
     def query_llama_via_ollama(self, prompt):
         """
-        Query the Ollama container running at localhost:11434.
+        Query the Ollama container running at `llama` inside Docker.
         """
-        url = "http://llama:11434/generate"  # or localhost if running on the same machine
-        payload = {"prompt": prompt}
+        url = "http://llama:11434/api/generate"  # Use 'llama' inside Docker
+        payload = {
+            "model": "tinyllama",  # Ensure you specify the model
+            "prompt": prompt,
+            "stream": False  # Set to True if you want streaming responses
+        }
 
-        # This depends on how exactly ollama expects the JSON body
-        response = requests.post(url, json=payload)
-        response_data = response.json()
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()  # Raise an error for HTTP failures
+            response_data = response.json()
 
-        # The 'response_data' structure depends on Ollama's API specification
-        return response_data.get("generated_text", "")
+            # Ollama returns the generated text under 'response'
+            return response_data.get("response", "")
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error querying Ollama: {e}")
+            return "Error: Could not connect to Ollama"
+
 
 
     def query_rag_gpt4(self, user_query):

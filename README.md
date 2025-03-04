@@ -16,9 +16,12 @@ Run the following command to build docker images
 ```
 make build
 ```
-
-1. Builds chroma
-2. Builds environment
+1. Builds the environment:
+   - Postgres database
+   - Chroma Database 
+   - Llama (tinyllama)
+   - Fast API
+   - Streamlit application
 
 ```
 make compose-up
@@ -32,21 +35,9 @@ The following command puts everything together
 make all
 ```
 
-### Check if chroma db is running in docker:
 
-`curl http://localhost:8000`
-
-You should receive the following message:
-
-```json
-{ "status": "ok", "detail": "ChromaDB custom server running." }
+# Migrate openai 
+After running environment need to run
 ```
-
-## Start FastAPI Service
-
-1. Change to src/app directory and run app
-
-```bash
-cd src/app
-uvicorn main:app --reload --host 0.0.0.0 --port 9000
+openai migrate 
 ```

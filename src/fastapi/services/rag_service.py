@@ -1,32 +1,32 @@
-# services/rag_service.py
 import os
 import requests
 from sentence_transformers import SentenceTransformer
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPEN_AI_API_KEY", "YOUR_OPEN_AI_API_KEY"))
 
 # Set up OpenAI client (for GPT-4)
-openai.api_key = os.getenv("OPEN_AI_API_KEY", "YOUR_OPEN_AI_API_KEY")
 
-def llama3_chat_completion(prompt: str, temperature: float = 0.7, max_tokens: int = 300) -> str:
+def ollama_chat_completion(prompt: str, temperature: float = 0.7, max_tokens: int = 300) -> str:
     """
-    Calls the LLaMA3 API (running in the 'llama3' container) to generate a chat completion.
-    Adjust the endpoint and payload as needed.
+    Calls the Ollama API running in the 'llama' container to generate a chat completion.
+    Uses the `tinyllama` model.
     """
-    llama_api_url = "http://llama3:11434/v1/chat/completions"  # Adjust if needed
+    ollama_api_url = "http://llama:11434/api/generate"  # Correct endpoint
     payload = {
-        "model": "llama3",  # or specify the actual model name if required
-        "messages": [
-            {"role": "system", "content": "You are a knowledgeable and helpful assistant."},
-            {"role": "user", "content": prompt}
-        ],
+        "model": "tinyllama",  # Ensure this matches the model available in Ollama
+        "prompt": prompt,
+        "stream": False,  # Set to True if streaming is needed
         "temperature": temperature,
-        "max_tokens": max_tokens,
+        "max_tokens": max_tokens
     }
-    response = requests.post(llama_api_url, json=payload)
+
+    response = requests.post(ollama_api_url, json=payload)
+
     if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"].strip()
+        return response.json().get("response", "").strip()
     else:
-        raise Exception(f"Error querying LLaMA: {response.text}")
+        raise Exception(f"Error querying Ollama: {response.text}")
 
 class RAGService:
     def __init__(self):
@@ -42,7 +42,7 @@ class RAGService:
         """
         if n_results is None:
             n_results = self.n_results
-        
+
         query_embedding = self.embedding_model.encode([query_text]).tolist()
         payload = {
             "collection_name": collection_name,
@@ -63,7 +63,7 @@ class RAGService:
         documents = query_result.get("documents", [[]])[0]
         metadatas = query_result.get("metadatas", [[]])[0]
         distances = query_result.get("distances", [[]])[0]
-        
+
         context_parts = []
         for doc, meta, dist in zip(documents, metadatas, distances):
             doc_name = meta.get("document_name", "Unknown") if meta else "Unknown"
@@ -80,20 +80,18 @@ class RAGService:
             f"Question: {query_text}\n\n"
             "Answer:"
         )
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a knowledgeable and helpful assistant."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=300,
-        )
+        response = client.chat.completions.create(model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a knowledgeable and helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=300)
         return response.choices[0].message.content.strip()
 
     def generate_llama_answer(self, query_text: str, context: str) -> str:
         """
-        Generates an answer using LLaMA3 via its API.
+        Generates an answer using TinyLLaMA via its API (Ollama).
         """
         prompt = (
             "You are a helpful assistant that answers questions based on provided context.\n\n"
@@ -101,7 +99,7 @@ class RAGService:
             f"Question: {query_text}\n\n"
             "Answer:"
         )
-        return llama3_chat_completion(prompt, temperature=0.7, max_tokens=300)
+        return ollama_chat_completion(prompt, temperature=0.7, max_tokens=300)
 
     def query_gpt(self, query_text: str, collection_name: str, db) -> str:
         """
@@ -115,7 +113,7 @@ class RAGService:
 
     def query_llama(self, query_text: str, collection_name: str, db) -> str:
         """
-        Performs a RAG query using LLaMA3.
+        Performs a RAG query using TinyLLaMA via Ollama.
         """
         query_result = self.query_chromadb(query_text, collection_name)
         context = self.build_context(query_result)
