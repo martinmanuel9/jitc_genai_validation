@@ -10,8 +10,10 @@ nest_asyncio.apply()
 
 # FastAPI endpoints
 HISTORY_ENDPOINT = "http://fastapi:9020/chat-history"
-LLM_API = "http://fastapi:9020/chat"
-RAG_API = "http://fastapi:9020/chat-rag"
+GPT4_API = "http://fastapi:9020/chat-gpt4"
+LLAMA_API = "http://fastapi:9020/chat-llama"
+RAG_LLAMA_API = "http://fastapi:9020/chat-rag-llama"
+RAG_GPT4_API = "http://fastapi:9020/chat-gpt4-rag"
 CHROMADB_API = "http://chromadb:8020"
 
 st.set_page_config(page_title="Chatbot", layout="wide")
@@ -21,7 +23,7 @@ st.title("JITC GenAI Chatbot with RAG")
 collections = fetch_collections()
 
 # Let user choose between "Direct GPT-4" and "GPT-4 with Retrieval"
-mode = st.selectbox("Select Mode:", ["Direct GPT-4", "RAG (Chroma + GPT-4)"])
+mode = st.selectbox("Select Mode:", ["Direct GPT-4", "RAG (Chroma + GPT-4)", "Meta Llama", "RAG (Meta Llama)"])
 
 # Collection selection for RAG mode
 collection_name = None
@@ -36,10 +38,16 @@ if st.button("Get Response"):
         if mode == "RAG (Chroma + GPT-4)" and not collection_name:
             st.error("Please select a collection for RAG mode.")
         else:
-            api_url = RAG_API if mode == "RAG (Chroma + GPT-4)" else LLM_API
-
-            payload = {"query": user_input}
             if mode == "RAG (Chroma + GPT-4)":
+                api_url = RAG_GPT4_API
+            elif mode == "RAG (Meta Llama)":
+                api_url = RAG_LLAMA_API
+            elif mode == "Meta Llama":
+                api_url = LLAMA_API
+            else:
+                api_url = GPT4_API
+            payload = {"query": user_input}
+            if mode.startswith("RAG"):
                 payload["collection_name"] = collection_name
 
             try:

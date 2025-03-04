@@ -24,15 +24,21 @@ services:
     volumes:
       - chromadb_data:/app/chroma_db_data
 
-  llama3:
-    image: ollama/ollama
-    container_name: llama3
-    restart: always
+  llama:
+    container_name: llama
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
     ports:
       - "11434:11434"
     volumes:
-      - llama3_data:/root/.ollama
-    entrypoint: ["/bin/sh", "-c", "ollama serve"]
+      - llama_data:/root/.ollama # Ensures model persistence
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "ollama serve & sleep 5 && ollama pull tinyllama && wait",
+      ]
 
   fastapi:
     build:
@@ -48,13 +54,15 @@ services:
       - OPEN_AI_API_KEY=${OPEN_AI_API_KEY}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - DATABASE_URL=postgresql://user:password@postgres_db:5432/rag_memory
+      - HF_HOME=/app/huggingface_cache
     depends_on:
       - postgres
       - chromadb
-      - llama3
+      - llama
     volumes:
       - ./src/fastapi/pyproject.toml:/app/pyproject.toml
       - ./src/fastapi/poetry.lock:/app/poetry.lock
+      - huggingface_cache_data:/app/huggingface_cache
 
   streamlit:
     build:
@@ -68,7 +76,7 @@ services:
     depends_on:
       - fastapi
       - chromadb
-      - llama3
+      - llama
       - postgres
 
     env_file:
@@ -82,5 +90,6 @@ services:
 
 volumes:
   chromadb_data:
-  llama3_data:
+  llama_data:
   pg_data:
+  huggingface_cache_data:

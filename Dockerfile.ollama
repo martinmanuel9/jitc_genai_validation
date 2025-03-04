@@ -1,0 +1,7 @@
+FROM ollama/ollama:latest
+
+# Expose Ollama’s API port
+EXPOSE 11434
+
+# Keep Ollama running
+ENTRYPOINT ["ollama", "serve"]

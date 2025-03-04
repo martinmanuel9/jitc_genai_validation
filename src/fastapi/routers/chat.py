@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
     query: str
 
 # /chat Endpoint
-@router.post("/chat")
+@router.post("/chat-gpt4")
 async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
         response = llm_service.query_gpt4(request.query)
@@ -34,9 +34,21 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/chat-rag")
-async def chat_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
+    
+@router.post("/chat-llama")
+async def chat_llama(request: ChatRequest, db: Session = Depends(get_db)):
+    try:
+        # response = llm_service.query_llama(request.query)
+        response = llm_service.query_llama_via_ollama(request.query)
+        db.add(ChatHistory(user_query=request.query, response=response))
+        db.commit()
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    
+@router.post("/chat-gpt4-rag")
+async def chat_rag_gpt4(request: RAGQueryRequest, db: Session = Depends(get_db)):
     """
     This endpoint calls GPT-4 with retrieval (RAG) using the selected collection.
     It also stores the chat interaction in the database.
@@ -47,6 +59,19 @@ async def chat_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
 
         # Pass the db session to rag_service.query() if needed for further logging.
         response = rag_service.query(user_prompt, collection_name, db)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"500: RAG query failed: {str(e)}")
+
+@router.post("/chat-rag-llama")
+async def chat_rag_llama(request: RAGQueryRequest, db: Session = Depends(get_db)):
+    """
+    Calls LLaMA3 with retrieval (RAG) using the selected collection.
+    """
+    try:
+        user_prompt = request.query
+        collection_name = request.collection_name
+        response = rag_service.query_llama(user_prompt, collection_name, db)
         return {"response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"500: RAG query failed: {str(e)}")

@@ -5,6 +5,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from langchain_openai import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage
 from services.rag_service import RAGService
+import requests
 class LLMService:
     def __init__(self):
         """Initialize LLMs (OpenAI & LLaMA) + RAG service."""
@@ -43,11 +44,27 @@ class LLMService:
         response = self.openai_client.invoke([HumanMessage(content=prompt)])
         return response.content.strip()
 
-    def query_llama(self, prompt):
-        """Query LLaMA using Hugging Face Transformers on CPU (no retrieval)."""
-        inputs = self.tokenizer(prompt, return_tensors="pt").to("cpu")
-        outputs = self.model.generate(**inputs, max_new_tokens=100)
-        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # def query_llama(self, prompt):
+    #     """Query LLaMA using Hugging Face Transformers on CPU (no retrieval)."""
+    #     inputs = self.tokenizer(prompt, return_tensors="pt").to("cpu")
+    #     outputs = self.model.generate(**inputs, max_new_tokens=100)
+    #     return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+    
+
+    def query_llama_via_ollama(self, prompt):
+        """
+        Query the Ollama container running at localhost:11434.
+        """
+        url = "http://llama:11434/generate"  # or localhost if running on the same machine
+        payload = {"prompt": prompt}
+
+        # This depends on how exactly ollama expects the JSON body
+        response = requests.post(url, json=payload)
+        response_data = response.json()
+
+        # The 'response_data' structure depends on Ollama's API specification
+        return response_data.get("generated_text", "")
+
 
     def query_rag_gpt4(self, user_query):
         """
