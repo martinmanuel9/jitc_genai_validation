@@ -1,6 +1,4 @@
 import os
-import torch
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from langchain_openai import ChatOpenAI
 from langchain.schema import AIMessage, HumanMessage
@@ -82,72 +80,3 @@ class LLMService:
         Returns a final answer with retrieved context.
         """
         return self.rag_service.query(user_query)
-
-    # -----------
-    # MULTI-AGENT COMPLIANCE
-    # -----------
-
-    def compliance_check(self, data_sample, standards):
-        """Run compliance check using multiple LLMs."""
-        agents = [ComplianceAgent(section, f"Section {i + 1}") for i, section in enumerate(standards)]
-        compliance_results = self.run_parallel_compliance_checks(agents, data_sample)
-        if all(compliance_results.values()):
-            return True  # All agents agree
-
-        # Debate non-compliant sections
-        debate_results = self.run_debate(agents, compliance_results, data_sample)
-        for idx, compliant in compliance_results.items():
-            if idx in debate_results:
-                compliance_results[idx] = debate_results[idx]
-
-        return all(compliance_results.values())  # Final decision
-
-    def run_parallel_compliance_checks(self, agents, data_sample):
-        """Run compliance checks in parallel."""
-        results = {}
-        with ThreadPoolExecutor() as executor:
-            futures = {executor.submit(agent.verify_compliance, data_sample): i for i, agent in enumerate(agents)}
-            for future in as_completed(futures):
-                idx = futures[future]
-                results[idx] = future.result()
-        return results
-
-    def run_debate(self, agents, compliance_results, data_sample):
-        """Run debates on compliance decisions."""
-        debate_results = {}
-        non_compliant_indices = [idx for idx, compliant in compliance_results.items() if not compliant]
-
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            for idx in non_compliant_indices:
-                peer_agent = agents[non_compliant_indices[(non_compliant_indices.index(idx) + 1) % len(non_compliant_indices)]]
-                futures.append((idx, executor.submit(peer_agent.debate_compliance, compliance_results[idx], data_sample)))
-
-            for idx, future in futures:
-                debate_results[idx] = future.result()
-        return debate_results
-
-
-class ComplianceAgent:
-    """Agent for verifying compliance with standards using GPT-4."""
-    def __init__(self, section_text, section_name):
-        self.section_text = section_text
-        self.section_name = section_name
-        self.llm = ChatOpenAI(
-            model_name="gpt-4",
-            openai_api_key=os.getenv("OPEN_AI_API_KEY")
-        )
-
-    def verify_compliance(self, data_sample):
-        """Verify if data complies with a standard section."""
-        system_prompt = f"You are an expert verifying data compliance."
-        user_prompt = f"Standard Section:\n{self.section_text}\n\nDoes this data comply? Respond 'Yes' or 'No'.\nData: {data_sample}"
-
-        response = self.llm([AIMessage(content=system_prompt), HumanMessage(content=user_prompt)])
-        return response.content.strip().lower() == "yes"
-
-    def debate_compliance(self, peer_response, data_sample):
-        """Debate compliance with another agent."""
-        debate_prompt = f"The agent for {self.section_name} found the data {'compliant' if peer_response else 'non-compliant'}.\nDo you agree? Respond 'Yes' or 'No'."
-        response = self.llm([HumanMessage(content=debate_prompt)])
-        return response.content.strip().lower() == "yes"

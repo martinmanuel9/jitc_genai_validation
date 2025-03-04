@@ -1,14 +1,18 @@
+import uuid
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from services.database import SessionLocal, ChatHistory
+from services.database import SessionLocal, ComplianceAgent, DebateSession, ChatHistory
 from services.rag_service import RAGService
 from services.llm_service import LLMService
+from services.agent_service import AgentService
+from typing import Optional, List
 
 router = APIRouter()  
 
 rag_service = RAGService()
 llm_service = LLMService()
+agent_service = AgentService()
 
 def get_db():
     db = SessionLocal()
@@ -20,10 +24,33 @@ def get_db():
 class RAGQueryRequest(BaseModel):
     query: str
     collection_name: str
-
 class ChatRequest(BaseModel):
     query: str
 
+class CreateAgentRequest(BaseModel):
+    name: str
+    model_name: str
+    system_prompt: str
+    user_prompt_template: str
+
+class ComplianceCheckRequest(BaseModel):
+    data_sample: str
+    agent_ids: list[int]
+
+class DebateRequest(BaseModel):
+    session_id: str
+    data_sample: str
+    
+class CreateSessionDebateRequest(BaseModel):
+    session_id: str | None = None
+    agent_ids: list[int]
+    data_sample: str
+
+class DebateSequenceRequest(BaseModel):
+    session_id: Optional[str] = None
+    agent_ids: List[int]  # in the exact run order
+    data_sample: str
+    
 # /chat Endpoint
 @router.post("/chat-gpt4")
 async def chat(request: ChatRequest, db: Session = Depends(get_db)):
@@ -93,3 +120,88 @@ def get_chat_history(db: Session = Depends(get_db)):
         }
         for record in records
     ]
+    
+
+@router.post("/create-agent")
+async def create_agent(request: CreateAgentRequest, db: Session = Depends(get_db)):
+    """Create a new compliance agent."""
+    try:
+        new_agent = ComplianceAgent(
+            name=request.name,
+            model_name=request.model_name,
+            system_prompt=request.system_prompt,
+            user_prompt_template=request.user_prompt_template
+        )
+        db.add(new_agent)
+        db.commit()
+        db.refresh(new_agent)
+        return {"message": "Agent created successfully!", "agent_id": new_agent.id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/get-agents")
+async def get_agents(db: Session = Depends(get_db)):
+    """Fetch all available compliance agents."""
+    agents = db.query(ComplianceAgent).all()
+    return {"agents": [{"id": agent.id, "name": agent.name, "model_name": agent.model_name} for agent in agents]}
+
+
+@router.post("/compliance-check")
+def compliance_check(request: ComplianceCheckRequest, db: Session = Depends(get_db)):
+    """
+    Runs compliance checks, and if not all compliant,
+    automatically triggers a debate with a new session_id.
+    """
+    try:
+        result = agent_service.run_compliance_check(
+            data_sample=request.data_sample,
+            agent_ids=request.agent_ids,
+            db=db
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/create-session-and-debate")
+def create_session_and_debate(request: CreateSessionDebateRequest, db: Session = Depends(get_db)):
+    """
+    Example: If you want a fresh session_id (or pass one in),
+    and pick some agents for debate, but skip compliance checks.
+    """
+    try:
+        session_id = request.session_id or str(uuid.uuid4())
+
+        # Add the agents to the DB for that session
+        for idx, agent_id in enumerate(request.agent_ids):
+            db.add(DebateSession(session_id=session_id, compliance_agent_id=agent_id, debate_order=idx+1))
+        db.commit()
+
+        # Then run debate
+        debate_results = agent_service.run_debate(session_id, request.data_sample)
+        return {"session_id": session_id, "debate_results": debate_results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/debate-sequence")
+def debate_sequence(request: DebateSequenceRequest, db: Session = Depends(get_db)):
+    """
+    Allows a custom, ordered multi-agent debate pipeline.
+    1) Optionally pass an existing session_id; if none is given, a new one is created.
+    2) agent_ids is a list in the EXACT order they should run.
+    3) The final result is a chain of each agent's response.
+    """
+    try:
+        # Let the agent_service handle the logic
+        session_id, debate_chain = agent_service.run_debate_sequence(
+            db=db,
+            session_id=request.session_id,
+            agent_ids=request.agent_ids,
+            data_sample=request.data_sample
+        )
+        return {
+            "session_id": session_id,
+            "debate_chain": debate_chain
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
