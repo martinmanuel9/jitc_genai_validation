@@ -6,6 +6,7 @@ from services.database import SessionLocal, ComplianceAgent, DebateSession, Chat
 from services.rag_service import RAGService
 from services.llm_service import LLMService
 from services.agent_service import AgentService
+from services.rag_agent_service import RAGAgentService
 from typing import Optional, List
 
 router = APIRouter()  
@@ -13,6 +14,7 @@ router = APIRouter()
 rag_service = RAGService()
 llm_service = LLMService()
 agent_service = AgentService()
+rag_agent_service = RAGAgentService()
 
 def get_db():
     db = SessionLocal()
@@ -50,6 +52,17 @@ class DebateSequenceRequest(BaseModel):
     session_id: Optional[str] = None
     agent_ids: List[int]  # in the exact run order
     data_sample: str
+    
+class RAGCheckRequest(BaseModel):
+    query_text: str
+    collection_name: str
+    agent_ids: list[int]
+
+class RAGDebateSequenceRequest(BaseModel):
+    session_id: Optional[str] = None
+    agent_ids: List[int]
+    query_text: str
+    collection_name: str
     
 # /chat Endpoint
 @router.post("/chat-gpt4")
@@ -147,7 +160,7 @@ async def get_agents(db: Session = Depends(get_db)):
 
 
 @router.post("/compliance-check")
-def compliance_check(request: ComplianceCheckRequest, db: Session = Depends(get_db)):
+async def compliance_check(request: ComplianceCheckRequest, db: Session = Depends(get_db)):
     """
     Runs compliance checks, and if not all compliant,
     automatically triggers a debate with a new session_id.
@@ -164,7 +177,7 @@ def compliance_check(request: ComplianceCheckRequest, db: Session = Depends(get_
 
 
 @router.post("/create-session-and-debate")
-def create_session_and_debate(request: CreateSessionDebateRequest, db: Session = Depends(get_db)):
+async def create_session_and_debate(request: CreateSessionDebateRequest, db: Session = Depends(get_db)):
     """
     Example: If you want a fresh session_id (or pass one in),
     and pick some agents for debate, but skip compliance checks.
@@ -184,7 +197,7 @@ def create_session_and_debate(request: CreateSessionDebateRequest, db: Session =
         raise HTTPException(status_code=500, detail=str(e))
     
 @router.post("/debate-sequence")
-def debate_sequence(request: DebateSequenceRequest, db: Session = Depends(get_db)):
+async def debate_sequence(request: DebateSequenceRequest, db: Session = Depends(get_db)):
     """
     Allows a custom, ordered multi-agent debate pipeline.
     1) Optionally pass an existing session_id; if none is given, a new one is created.
@@ -202,6 +215,45 @@ def debate_sequence(request: DebateSequenceRequest, db: Session = Depends(get_db
         return {
             "session_id": session_id,
             "debate_chain": debate_chain
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/rag-check")
+async def rag_check(request: RAGCheckRequest, db: Session = Depends(get_db)):
+    """
+    Runs parallel RAG checks using the selected agents,
+    returning 'Yes'/'No' compliance and triggers a debate if needed.
+    """
+    try:
+        result = rag_agent_service.run_rag_check(
+            query_text=request.query_text,
+            collection_name=request.collection_name,
+            agent_ids=request.agent_ids,
+            db=db
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/rag-debate-sequence")
+async def rag_debate_sequence(request: RAGDebateSequenceRequest, db: Session = Depends(get_db)):
+    """
+    Creates a new or reuses an existing session_id, 
+    then runs the agents in order, each performing a RAG retrieval. 
+    They see the previous context (the chain so far) and respond. 
+    """
+    try:
+        session_id, chain = rag_agent_service.run_rag_debate_sequence(
+            db=db,
+            session_id=request.session_id,
+            agent_ids=request.agent_ids,
+            query_text=request.query_text,
+            collection_name=request.collection_name
+        )
+        return {
+            "session_id": session_id,
+            "debate_chain": chain
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
