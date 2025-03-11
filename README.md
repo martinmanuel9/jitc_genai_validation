@@ -199,4 +199,12 @@ Entity Location: (1234567.0, -2345678.0, 3456789.0) meters
 Entity Orientation: (Psi: 1.0, Theta: 2.0, Phi: -10.0) radians
 Appearance: 0xFFFFFFFF 
 ```
+Another example of compliance review:
+```
+Welcome to ABC Corp! By using our services, you agree to the following terms:
+1. We may collect and store your full name, email, and phone number.
+2. Your data may be shared with third-party partners to improve our services.
+3. Users cannot request data deletion.
+4. Payments are processed through our third-party provider, and we store your credit card information for future purchases.
+```
 

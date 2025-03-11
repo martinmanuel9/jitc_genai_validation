@@ -23,7 +23,7 @@ RUN python -m openai migrate
 COPY . .
 
 # Expose FastAPI port
-EXPOSE 9000
+EXPOSE 9020
 
 # Run FastAPI with Uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9020"]
