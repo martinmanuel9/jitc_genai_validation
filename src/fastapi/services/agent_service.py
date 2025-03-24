@@ -2,8 +2,6 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy.orm import Session
-from langchain_openai import ChatOpenAI
-from langchain.schema import AIMessage, HumanMessage
 from services.database import SessionLocal, ComplianceAgent, ComplianceSequence, DebateSession
 from services.llm_service import LLMService
 
@@ -25,7 +23,7 @@ class AgentService:
                 self.compliance_agents.append({
                     "id": agent.id,
                     "name": agent.name,
-                    "model_name": agent.model_name,
+                    "model_name": agent.model_name.lower(),  # Normalize model names
                     "system_prompt": agent.system_prompt,
                     "user_prompt_template": agent.user_prompt_template
                 })
@@ -43,29 +41,20 @@ class AgentService:
 
         # Step 1: Run parallel checks
         compliance_results = self.run_parallel_compliance_checks(data_sample)
-        # compliance_results is a dict like:
-        #   {
-        #       0: {"compliant": True, "reason": "...", "raw_text": "..."},
-        #       1: {"compliant": False, "reason": "...", "raw_text": "..."}
-        #   }
 
         # Step 2: Determine overall compliance
         bool_vals = [res["compliant"] for res in compliance_results.values() if res["compliant"] is not None]
-        # True if *all* are True and not empty:
         all_compliant = bool_vals and all(bool_vals)
 
         if all_compliant:
-            # No debate needed
             return {
                 "overall_compliance": True,
                 "details": compliance_results
             }
         else:
-            # Create a new session_id for debate
             session_id = str(uuid.uuid4())
 
-            # Store these agents in the DebateSession table for the new session
-            # so that run_debate() can load them
+            # Store these agents in the DebateSession table
             for idx, agent_info in enumerate(self.compliance_agents):
                 db.add(DebateSession(
                     session_id=session_id,
@@ -101,31 +90,22 @@ class AgentService:
         """
         Check compliance using the specified agent.
         Expect the agent to reply with either "Yes" or "No" 
-        plus an explanation. We'll parse that into:
-            {
-                "compliant": bool, 
-                "reason": str, 
-                "raw_text": str
-            }
+        plus an explanation.
         """
-        if agent["model_name"] == "gpt-4":
-            llm = ChatOpenAI(
-                model_name="gpt-4",
-                openai_api_key=os.getenv("OPEN_AI_API_KEY")
-            )
-            user_prompt = agent["user_prompt_template"].format(data_sample=data_sample)
-            gpt_response = llm.invoke([
-                AIMessage(content=agent["system_prompt"]),
-                HumanMessage(content=user_prompt)
-            ])
-            raw_text = gpt_response.content.strip()
-        elif agent["model_name"] == "tinyllama":
-            raw_text = llm_service.query_llama_via_ollama(prompt=data_sample).strip()
-        else:
-            raw_text = "Error: Model not recognized."
+        model_name = agent["model_name"]
 
-        # Example parse: we expect the first line to be "Yes" or "No"
-        # and subsequent lines to be the reason/explanation.
+        if model_name == "gpt-4" or model_name == "gpt4":
+            raw_text = llm_service.query_gpt4(prompt=data_sample).strip()
+        elif model_name == "llama" or model_name == "llama3":
+            raw_text = llm_service.query_llama(prompt=data_sample).strip()
+        elif model_name == "mistral":
+            raw_text = llm_service.query_mistral(prompt=data_sample).strip()
+        elif model_name == "gemma":
+            raw_text = llm_service.query_gemma(prompt=data_sample).strip()
+        else:
+            raw_text = f"Error: Model '{model_name}' not recognized."
+
+        # Parse response: first line should be "Yes" or "No"
         lines = raw_text.split("\n", 1)
         first_line = lines[0].lower()
 
@@ -134,7 +114,7 @@ class AgentService:
         elif "no" in first_line:
             compliant = False
         else:
-            compliant = None  # Could not parse
+            compliant = None
 
         reason = lines[1].strip() if len(lines) > 1 else ""
 
@@ -146,15 +126,10 @@ class AgentService:
 
     def run_debate(self, session_id: str, data_sample: str):
         """
-        Always receives a session_id (string) to find the agents 
-        that are participating in this debate. 
-        Then collects each agent's 'Yes'/'No' plus reasoning.
+        Runs a debate session with selected agents.
         """
-        # 1) Load the debate agents from the DB in the correct order
         debate_agents = self.load_debate_agents(session_id)
 
-        # 2) For simplicity, we run them in sequence or parallel 
-        #    to see if they 'agree' or 'disagree'.
         results = {}
         with ThreadPoolExecutor() as executor:
             futures = {
@@ -164,6 +139,7 @@ class AgentService:
             for future in as_completed(futures):
                 agent_name = futures[future]
                 results[agent_name] = future.result()
+
         return results
 
     def load_debate_agents(self, session_id: str):
@@ -192,9 +168,7 @@ class AgentService:
 
     def debate_compliance(self, agent: dict, data_sample: str):
         """
-        Each debate agent can see the data. 
-        For GPT-4, call ChatOpenAI. 
-        For tinyllama, call our local service.
+        Runs compliance check during a debate session.
         """
         debate_prompt = (
             f"Agent {agent['name']} is evaluating this data again:\n"
@@ -202,39 +176,34 @@ class AgentService:
             "Do you find this compliant? Answer 'Yes' or 'No' and explain why."
         )
 
-        if agent["model_name"] == "gpt-4":
-            llm = ChatOpenAI(
-                model_name="gpt-4",
-                openai_api_key=os.getenv("OPEN_AI_API_KEY")
-            )
-            response = llm.invoke([HumanMessage(content=debate_prompt)])
-            return response.content.strip()
+        model_name = agent["model_name"].lower()
 
-        elif agent["model_name"] == "tinyllama":
-            # Call your local LLaMA or Ollama service
-            response_text = llm_service.query_llama_via_ollama(prompt=debate_prompt)
-            return response_text
-
+        if model_name == "gpt-4" or model_name == "gpt4":
+            response_text = llm_service.query_gpt4(prompt=debate_prompt)
+        elif model_name == "llama" or model_name == "llama3":
+            response_text = llm_service.query_llama(prompt=debate_prompt)
+        elif model_name == "mistral":
+            response_text = llm_service.query_mistral(prompt=debate_prompt)
+        elif model_name == "gemma":
+            response_text = llm_service.query_gemma(prompt=debate_prompt)
         else:
-            return "Error: Model not recognized."
+            return f"Error: Model '{model_name}' not recognized."
+
+        return response_text.strip()
 
     def run_debate_sequence(self, db: Session, session_id: str | None, agent_ids: list[int], data_sample: str):
         """
-        1) If session_id is None, create a new one.
-        2) Store these agents in the DebateSession table in the specified order.
-        3) Iteratively call each agent, feeding the previous agent's response into the next prompt.
-        4) Return the entire chain of results.
+        Runs a sequential debate session with multiple agents.
         """
+
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # 1. Clear out any existing debate records if you want a fresh chain each time,
-        #    or skip this if you want to *append* to an existing session.
-        #    For now, we do a fresh approach:
+        # Clear prior debate records
         db.query(DebateSession).filter(DebateSession.session_id == session_id).delete()
         db.commit()
 
-        # 2. Insert these agents in order
+        # Insert agents in order
         for idx, agent_id in enumerate(agent_ids):
             db.add(DebateSession(
                 session_id=session_id,
@@ -243,57 +212,21 @@ class AgentService:
             ))
         db.commit()
 
-        # 3. Actually run the "sequence" of debates
-        #    We'll keep a "context" string that grows after each agent's turn.
-        #    Or each agent can produce a "Yes"/"No", but we show how to store it all in "context."
-        debate_records = self.load_debate_agents(session_id)
-        debate_chain = []  # collect each agent's output
+        # Load debate agents from the database
+        debate_agents = self.load_debate_agents(session_id)
 
-        # We'll store the entire "context" in a string
-        # The initial context is the user data, or possibly you want a more structured approach
+        debate_chain = []
         context = f"Initial data:\n{data_sample}\n"
 
-        for agent in debate_records:
-            # Build a custom prompt that includes the current "context"
-            # so the agent sees what happened previously
-            agent_prompt = (
-                f"{context}\n"
-                f"Agent {agent['name']}, please respond with 'Yes' or 'No' plus reasoning.\n"
-                "If you are second or later in the sequence, you can see the prior responses above.\n"
-            )
+        for agent in debate_agents:
+            agent_response = self.debate_compliance(agent, context)
 
-            # Actually call the agent
-            agent_response = self.single_agent_run(agent, agent_prompt)
-
-            # Update "context" by appending this agent's response
-            context += f"\n{agent['name']} responded:\n{agent_response}\n"
-
-            # Store in the chain
             debate_chain.append({
                 "agent_id": agent["id"],
                 "agent_name": agent["name"],
                 "response": agent_response
             })
 
+            context += f"\n---\nAgent {agent['name']} responded:\n{agent_response}\n"
+
         return session_id, debate_chain
-
-
-    def single_agent_run(self, agent: dict, prompt: str) -> str:
-        """
-        Runs a single agent with the given prompt and returns the raw text.
-        """
-        if agent["model_name"] == "gpt-4":
-            llm = ChatOpenAI(
-                model_name="gpt-4",
-                openai_api_key=os.getenv("OPEN_AI_API_KEY")
-            )
-            response = llm.invoke([HumanMessage(content=prompt)])
-            return response.content.strip()
-
-        elif agent["model_name"] == "tinyllama":
-            # Call your local LLaMA or Ollama service
-            response_text = llm_service.query_llama_via_ollama(prompt=prompt)
-            return response_text.strip()
-
-        else:
-            return "Error: Unknown model_name."

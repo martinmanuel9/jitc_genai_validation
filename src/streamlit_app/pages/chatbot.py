@@ -12,8 +12,12 @@ nest_asyncio.apply()
 HISTORY_ENDPOINT = "http://fastapi:9020/chat-history"
 GPT4_API = "http://fastapi:9020/chat-gpt4"
 LLAMA_API = "http://fastapi:9020/chat-llama"
-RAG_LLAMA_API = "http://fastapi:9020/chat-rag-llama"
+MISTRAL_API = "http://fastapi:9020/chat-mistral"
+GEMMA_API = "http://fastapi:9020/chat-gemma"
 RAG_GPT4_API = "http://fastapi:9020/chat-gpt4-rag"
+RAG_LLAMA_API = "http://fastapi:9020/chat-rag-llama"
+RAG_MISTRAL_API = "http://fastapi:9020/chat-rag-mistral"
+RAG_GEMMA_API = "http://fastapi:9020/chat-rag-gemma"
 CHROMADB_API = "http://chromadb:8020"
 
 st.set_page_config(page_title="Chatbot", layout="wide")
@@ -22,49 +26,56 @@ st.title("JITC GenAI Chatbot with RAG")
 # Fetch collections from ChromaDB
 collections = fetch_collections()
 
-# Let user choose between "Direct GPT-4" and "GPT-4 with Retrieval"
-mode = st.selectbox("Select Mode:", ["Direct GPT-4", "RAG (Chroma + GPT-4)", "Meta Llama", "RAG (Meta Llama)"])
+# Let user choose between GPT-4, LLaMA, Mistral, and Gemma for direct or RAG mode
+mode = st.selectbox("Select Mode:", [
+    "Direct GPT-4", "RAG (Chroma + GPT-4)", 
+    "Direct LLaMA", "RAG (Chroma + LLaMA)", 
+    "Direct Mistral", "RAG (Chroma + Mistral)", 
+    "Direct Gemma", "RAG (Chroma + Gemma)"
+])
 
 # Collection selection for RAG modes
 collection_name = None
-if mode in ["RAG (Chroma + GPT-4)", "RAG (Meta Llama)"] and collections:
-    collection_name = st.selectbox("Select a ChromaDB Collection:", collections)
+if "RAG" in mode and collections:
+    collection_name = st.selectbox("Select a Vector Database Collection:", collections)
 
 user_input = st.text_input("Ask me something:")
 
 if st.button("Get Response"):
     if user_input:
         # Ensure valid input for RAG mode
-        if mode == "RAG (Chroma + GPT-4)" and not collection_name:
+        if "RAG" in mode and not collection_name:
             st.error("Please select a collection for RAG mode.")
         else:
-            if mode == "RAG (Chroma + GPT-4)":
-                api_url = RAG_GPT4_API
-            elif mode == "RAG (Meta Llama)":
-                api_url = RAG_LLAMA_API
-            elif mode == "Meta Llama":
-                api_url = LLAMA_API
-            else:
-                api_url = GPT4_API
-                
+            # Map mode selection to API endpoints
+            api_map = {
+                "Direct GPT-4": GPT4_API,
+                "Direct LLaMA": LLAMA_API,
+                "Direct Mistral": MISTRAL_API,
+                "Direct Gemma": GEMMA_API,
+                "RAG (Chroma + GPT-4)": RAG_GPT4_API,
+                "RAG (Chroma + LLaMA)": RAG_LLAMA_API,
+                "RAG (Chroma + Mistral)": RAG_MISTRAL_API,
+                "RAG (Chroma + Gemma)": RAG_GEMMA_API
+            }
+            
+            api_url = api_map.get(mode)
             payload = {"query": user_input}
             
-            if mode in ["RAG (Chroma + GPT-4)", "RAG (Meta Llama)"]:
+            if "RAG" in mode:
                 if not collection_name:
                     st.error("Please select a collection for RAG mode.")
                     st.stop()  
                 payload["collection_name"] = collection_name 
-
+                
             try:
                 response = requests.post(api_url, json=payload)
                 response_json = response.json()
-
                 if response.status_code == 200:
                     st.success("Response:")
                     st.write(response_json.get("response", "No response received."))
                 else:
                     st.error(f"Error {response.status_code}: {response_json.get('detail', response.text)}")
-
             except requests.exceptions.RequestException as e:
                 st.error(f"Request failed: {e}")
 
@@ -85,6 +96,5 @@ if st.button("Load Chat History"):
                     st.write("---")
         else:
             st.error(f"Failed to load chat history. Status: {response.status_code}")
-
     except requests.exceptions.RequestException as e:
         st.error(f"Request failed: {e}")

@@ -1,7 +1,7 @@
 FROM ollama/ollama:latest
 
-# Expose Ollama’s API port
+# Expose Ollama API port
 EXPOSE 11434
 
-# Keep Ollama running
-ENTRYPOINT ["ollama", "serve"]
+# Start Ollama, then pull models after it starts
+ENTRYPOINT ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3 && ollama pull mistral && ollama pull gemma && wait"]

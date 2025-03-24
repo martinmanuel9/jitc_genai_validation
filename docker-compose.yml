@@ -11,7 +11,6 @@ services:
       POSTGRES_DB: rag_memory
     volumes:
       - pg_data:/var/lib/postgresql/data
-
   chromadb:
     build:
       context: ./src/chromadb
@@ -23,7 +22,6 @@ services:
       - CHROMADB_PERSIST_DIRECTORY=/app/chroma_db_data
     volumes:
       - chromadb_data:/app/chroma_db_data
-
   llama:
     container_name: llama
     build:
@@ -37,9 +35,8 @@ services:
       [
         "/bin/sh",
         "-c",
-        "ollama serve & sleep 5 && ollama pull tinyllama && wait",
+        "ollama serve & sleep 5 && ollama pull llama3 && ollama pull mistral && ollama pull gemma && wait",
       ]
-
   fastapi:
     build:
       context: ./src/fastapi
@@ -63,7 +60,6 @@ services:
       - ./src/fastapi/pyproject.toml:/app/pyproject.toml
       - ./src/fastapi/poetry.lock:/app/poetry.lock
       - huggingface_cache_data:/app/huggingface_cache
-
   streamlit:
     build:
       context: .
@@ -78,7 +74,6 @@ services:
       - chromadb
       - llama
       - postgres
-
     env_file:
       - .env
     environment:
@@ -87,7 +82,6 @@ services:
     volumes:
       - ./src/streamlit_app/pyproject.toml:/app/pyproject.toml
       - ./src/streamlit_app/poetry.lock:/app/poetry.lock
-
 volumes:
   chromadb_data:
   llama_data:

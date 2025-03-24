@@ -2,18 +2,18 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy.orm import Session
-
 from services.database import SessionLocal, ComplianceAgent, DebateSession
 from services.llm_service import LLMService
+from services.rag_service import RAGService
 
 # We'll use the existing LLMService (which holds a reference to RAGService)
 llm_service = LLMService()
-rag_service = llm_service.rag_service
+rag_service = RAGService()
 
 class RAGAgentService:
     """
     This service parallels your AgentService, but uses retrieval (RAG).
-    Each agent is expected to do a RAG query (with GPT-4 or TinyLLaMA) 
+    Each agent is expected to do a RAG query (with LLaMA, Mistral, or Gemma) 
     and then respond in a "Yes" or "No" + explanation format.
     """
 
@@ -34,10 +34,53 @@ class RAGAgentService:
                 self.compliance_agents.append({
                     "id": agent.id,
                     "name": agent.name,
-                    "model_name": agent.model_name,
+                    "model_name": agent.model_name.lower(),  # Normalize model names
                     "system_prompt": agent.system_prompt,
                     "user_prompt_template": agent.user_prompt_template
                 })
+        finally:
+            session.close()
+
+    def load_debate_agents(self, session_id):
+        """Load debate agents for a specific session."""
+        session = SessionLocal()
+        try:
+            # Query for debate session info, ordered by debate_order
+            debate_sessions = (
+                session.query(DebateSession)
+                .filter(DebateSession.session_id == session_id)
+                .order_by(DebateSession.debate_order)
+                .all()
+            )
+            
+            # Get the agent IDs
+            agent_ids = [ds.compliance_agent_id for ds in debate_sessions]
+            
+            # Query for the agents
+            agents = (
+                session.query(ComplianceAgent)
+                .filter(ComplianceAgent.id.in_(agent_ids))
+                .all()
+            )
+            
+            # Create a mapping from agent ID to agent data
+            agent_map = {agent.id: agent for agent in agents}
+            
+            # Assemble the agents in the correct order
+            debate_agents = []
+            for ds in debate_sessions:
+                agent = agent_map.get(ds.compliance_agent_id)
+                if agent:
+                    debate_agents.append({
+                        "id": agent.id,
+                        "name": agent.name,
+                        "model_name": agent.model_name.lower(),
+                        "system_prompt": agent.system_prompt,
+                        "user_prompt_template": agent.user_prompt_template,
+                        "debate_order": ds.debate_order
+                    })
+            
+            return debate_agents
         finally:
             session.close()
 
@@ -100,19 +143,17 @@ class RAGAgentService:
 
     def verify_rag(self, agent: dict, query_text: str, collection_name: str, db: Session):
         """
-        1) Perform a RAG query using either GPT-4 or TinyLLaMA.
+        1) Perform a RAG query using either LLaMA, Mistral, or Gemma.
         2) Parse the result into a "Yes"/"No" + explanation. 
-        (You can adjust the prompts to ensure the model returns this format.)
         """
-        model_name = agent["model_name"].lower()
+        model_name = agent["model_name"]
 
-        # We'll pass the user query, collection, and db to rag_service
-        if model_name == "gpt-4":
-            # Query GPT-4 with retrieval
-            raw_text = rag_service.query_gpt(query_text, collection_name, db)
-        elif model_name == "tinyllama":
-            # Query TinyLLaMA with retrieval
-            raw_text = rag_service.query_llama(query_text, collection_name, db)
+        if model_name == "llama" or model_name == "llama3":
+            raw_text = rag_service.query_llama(query_text, collection_name)
+        elif model_name == "mistral":
+            raw_text = rag_service.query_mistral(query_text, collection_name)
+        elif model_name == "gemma":
+            raw_text = rag_service.query_gemma(query_text, collection_name)
         else:
             raw_text = f"Error: Model '{agent['model_name']}' not recognized."
 
@@ -138,9 +179,7 @@ class RAGAgentService:
 
     def run_rag_debate(self, session_id: str, query_text: str, collection_name: str, db: Session):
         """
-        1) Loads the debate agents in the correct order from DB.
-        2) Each agent does a retrieval-based check again, 
-        but now you might want a different prompt or logic.
+        Runs a debate session where multiple agents evaluate the query.
         """
         debate_agents = self.load_debate_agents(session_id)
         results = {}
@@ -156,46 +195,18 @@ class RAGAgentService:
 
         return results
 
-    def load_debate_agents(self, session_id: str):
-        """Fetch compliance agents for the given debate session."""
-        session = SessionLocal()
-        try:
-            debate_records = (
-                session.query(DebateSession)
-                .filter(DebateSession.session_id == session_id)
-                .order_by(DebateSession.debate_order)
-                .all()
-            )
-
-            debate_agents = []
-            for record in debate_records:
-                agent = record.compliance_agent
-                debate_agents.append({
-                    "id": agent.id,
-                    "name": agent.name,
-                    "model_name": agent.model_name,
-                    "system_prompt": agent.system_prompt,
-                    "user_prompt_template": agent.user_prompt_template
-                })
-            return debate_agents
-
-        finally:
-            session.close()
-
     def debate_rag_compliance(self, agent: dict, query_text: str, collection_name: str, db: Session):
         """
-        1) Another retrieval-based step for the debate.
-        2) Possibly a different style prompt or logic. 
-        For demonstration, just re-run the same approach.
+        Runs an additional retrieval-based check during the debate phase.
         """
-        model_name = agent["model_name"].lower()
+        model_name = agent["model_name"]
 
-        # You might want to incorporate "the previous agent said NO" or something 
-        # to show debate context. For now, we just do the same retrieval-based logic:
-        if model_name == "gpt-4":
-            raw_text = rag_service.query_gpt(query_text, collection_name, db)
-        elif model_name == "tinyllama":
-            raw_text = rag_service.query_llama(query_text, collection_name, db)
+        if model_name == "llama" or model_name == "llama3":
+            raw_text = rag_service.query_llama(query_text, collection_name)
+        elif model_name == "mistral":
+            raw_text = rag_service.query_mistral(query_text, collection_name)
+        elif model_name == "gemma":
+            raw_text = rag_service.query_gemma(query_text, collection_name)
         else:
             raw_text = f"Error: Model '{agent['model_name']}' not recognized."
 
@@ -203,25 +214,17 @@ class RAGAgentService:
 
     def run_rag_debate_sequence(self, db: Session, session_id: str | None, agent_ids: list[int], query_text: str, collection_name: str):
         """
-        1) If session_id is None, create a new one.
-        2) Clear out prior debate records for that session (if any) to start fresh.
-        3) Insert these agents in the DB in the specified order.
-        4) Iterate them in order, each time:
-            - Construct a prompt that includes the running context so far
-            - Perform a new RAG retrieval
-            - Agent produces a response
-            - Append that response to the chain and the context
-        5) Return (session_id, debate_chain).
+        Runs a sequential debate session with multiple agents.
         """
 
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # 1) Clear existing debate records if you want a truly fresh chain.
+        # Clear prior debate records
         db.query(DebateSession).filter(DebateSession.session_id == session_id).delete()
         db.commit()
 
-        # 2) Insert these agents in order
+        # Insert agents in order
         for idx, agent_id in enumerate(agent_ids):
             db.add(DebateSession(
                 session_id=session_id,
@@ -230,22 +233,14 @@ class RAGAgentService:
             ))
         db.commit()
 
-        # 3) Load the debate agents from the DB
+        # Load debate agents from the database
         debate_agents = self.load_debate_agents(session_id)
 
         debate_chain = []
         context = f"Original user query:\n{query_text}\n"
 
-        # 4) Run them in a sequence
         for agent in debate_agents:
-            agent_prompt = (
-                f"You have the following context:\n{context}\n"
-                "Please provide your answer. If you have a final stance (Yes or No), "
-                "include it on the first line, followed by your reasoning."
-            )
-
-            # Single turn with RAG
-            agent_response = self.single_rag_agent_run(agent, agent_prompt, collection_name, db)
+            agent_response = self.debate_rag_compliance(agent, context, collection_name, db)
 
             debate_chain.append({
                 "agent_id": agent["id"],
@@ -253,25 +248,6 @@ class RAGAgentService:
                 "response": agent_response
             })
 
-            # Update context so next agent sees what the previous one said
             context += f"\n---\nAgent {agent['name']} responded:\n{agent_response}\n"
 
         return session_id, debate_chain
-
-    def single_rag_agent_run(self, agent: dict, query_text: str, collection_name: str, db: Session) -> str:
-        """
-        For a single turn:
-        1) Use the agent's model (GPT-4 vs. TinyLLaMA).
-        2) Perform retrieval using the entire `query_text`.
-        3) Return the raw text of the agent's answer.
-        """
-        model_name = agent["model_name"].lower()
-
-        if model_name == "gpt-4":
-            raw_text = rag_service.query_gpt(query_text, collection_name, db)
-        elif model_name == "tinyllama":
-            raw_text = rag_service.query_llama(query_text, collection_name, db)
-        else:
-            raw_text = f"Error: Model '{agent['model_name']}' not recognized."
-
-        return raw_text.strip()
