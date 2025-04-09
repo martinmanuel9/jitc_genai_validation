@@ -5,7 +5,6 @@ from utils import fetch_collections
 import torch
 torch.classes.__path__ = [] 
 
-# Apply asyncio patch to prevent runtime errors
 nest_asyncio.apply()
 
 # FastAPI endpoints
@@ -23,10 +22,8 @@ CHROMADB_API = "http://chromadb:8020"
 st.set_page_config(page_title="Chatbot", layout="wide")
 st.title("JITC GenAI Chatbot with RAG")
 
-# Fetch collections from ChromaDB
 collections = fetch_collections()
 
-# Let user choose between GPT-4, LLaMA, Mistral, and Gemma for direct or RAG mode
 mode = st.selectbox("Select Mode:", [
     "Direct GPT-4", "RAG (Chroma + GPT-4)", 
     "Direct LLaMA", "RAG (Chroma + LLaMA)", 
@@ -34,7 +31,6 @@ mode = st.selectbox("Select Mode:", [
     "Direct Gemma", "RAG (Chroma + Gemma)"
 ])
 
-# Collection selection for RAG modes
 collection_name = None
 if "RAG" in mode and collections:
     collection_name = st.selectbox("Select a Vector Database Collection:", collections)

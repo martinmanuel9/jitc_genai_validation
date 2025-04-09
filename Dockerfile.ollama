@@ -3,5 +3,5 @@ FROM ollama/ollama:latest
 # Expose Ollama API port
 EXPOSE 11434
 
-# Start Ollama, then pull models after it starts
-ENTRYPOINT ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3 && ollama pull mistral && ollama pull gemma && wait"]
+# Just start Ollama server (no downloads needed as models are mounted)
+ENTRYPOINT ["/bin/sh", "-c", "ollama serve & wait"]

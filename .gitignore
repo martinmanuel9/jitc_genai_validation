@@ -1,3 +1,5 @@
 .env
-src/data/**
 volumes/**
+data/**
+models/** 
+logs/**
