@@ -3,4 +3,3 @@ volumes/**
 data/**
 models/** 
 logs/**
-installer.sh
