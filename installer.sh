@@ -2,10 +2,18 @@
 # Platform-agnostic JITC GENAI Validation System setup
 
 # Configuration - change these as needed
-PROJECT_NAME="jitc_genai_validation"
+PROJECT_NAME="$(basename "$PWD")"
 REPO_URL="https://github.com/martinmanuel9/jitc_genai_validation.git"
 
 echo "Setting up $PROJECT_NAME..."
+
+# Get the current directory where installer.sh is located
+CURRENT_DIR="$(pwd)"
+echo "Current directory: $CURRENT_DIR"
+
+# Create project directory in user's home folder
+PROJECT_DIR="$HOME/$PROJECT_NAME"
+echo "Project directory: $PROJECT_DIR"
 
 # Check for Docker
 if ! command -v docker &> /dev/null; then
@@ -29,38 +37,102 @@ fi
 echo "Using compose command: $DOCKER_COMPOSE_CMD"
 
 # Check for .env file
-if [ ! -f ".env" ]; then
-    echo "Error: .env file not found in the current directory."
+if [ ! -f "$CURRENT_DIR/.env" ]; then
+    echo "Error: .env file not found in the current directory: $CURRENT_DIR"
     echo "Please create a .env file with your API keys and configuration before running this script."
     exit 1
+else
+    echo "Found .env file in current directory"
 fi
 
-# Create project directory in user's home folder
-PROJECT_DIR="$HOME/$PROJECT_NAME"
+# STEP 1: Get the code (clone or update)
+echo "Checking for repository at $PROJECT_DIR"
+
+if [ -d "$PROJECT_DIR/.git" ]; then
+    echo "Found existing Git repository at $PROJECT_DIR"
+    # Check if it's the correct repository
+    cd "$PROJECT_DIR"
+    current_remote=$(git remote get-url origin 2>/dev/null)
+    
+    if [ "$current_remote" = "$REPO_URL" ]; then
+        echo "Repository matches expected URL. Updating..."
+        git pull
+    else
+        echo "Warning: Existing repository has a different remote URL."
+        echo "Expected: $REPO_URL"
+        echo "Found: $current_remote"
+        echo "Would you like to:"
+        echo "1) Use the existing repository as-is"
+        echo "2) Update the remote URL and pull latest code"
+        read -p "Enter choice (1-2): " repo_choice
+        
+        if [ "$repo_choice" = "2" ]; then
+            echo "Updating remote URL and pulling latest code..."
+            git remote set-url origin "$REPO_URL"
+            git pull
+        else
+            echo "Using existing repository without updating."
+        fi
+    fi
+else
+    echo "No existing repository found. Cloning from GitHub to $PROJECT_DIR..."
+    mkdir -p "$PROJECT_DIR"
+    git clone "$REPO_URL" "$PROJECT_DIR"
+    
+    if [ $? -ne 0 ]; then
+        echo "Git clone failed. Attempting manual download..."
+        # Create a fresh directory
+        rm -rf "$PROJECT_DIR"
+        mkdir -p "$PROJECT_DIR"
+        cd "$PROJECT_DIR"
+        
+        # Download the repository as a zip file
+        echo "Downloading repository zip file..."
+        TEMP_ZIP="$PROJECT_DIR/repo.zip"
+        if command -v curl &>/dev/null; then
+            curl -L -o "$TEMP_ZIP" "$REPO_URL/archive/refs/heads/main.zip" 
+        elif command -v wget &>/dev/null; then
+            wget -O "$TEMP_ZIP" "$REPO_URL/archive/refs/heads/main.zip"
+        else
+            echo "Error: Neither curl nor wget found. Cannot download repository."
+            exit 1
+        fi
+        
+        # Extract the zip file
+        echo "Extracting repository..."
+        unzip -o "$TEMP_ZIP" 
+        
+        # Move files from the extracted directory
+        EXTRACT_DIR=$(find . -maxdepth 1 -type d -name "*jitc_genai_validation*" | head -1)
+        if [ -n "$EXTRACT_DIR" ]; then
+            echo "Moving files from $EXTRACT_DIR to $PROJECT_DIR"
+            mv "$EXTRACT_DIR"/* .
+            rm -rf "$EXTRACT_DIR"
+        else
+            echo "Warning: Could not find extracted directory"
+        fi
+        
+        # Clean up
+        rm -f "$TEMP_ZIP"
+    fi
+    cd "$PROJECT_DIR"
+fi
+
+# STEP 2: Create necessary directories after source code is available
+echo "Creating data directories..."
 DATA_DIR="$PROJECT_DIR/data"
 MODEL_DIR="$PROJECT_DIR/models"
+LOGS_DIR="$PROJECT_DIR/logs"
 
-# Create directories
-mkdir -p "$PROJECT_DIR"
 mkdir -p "$DATA_DIR/chromadb"
 mkdir -p "$DATA_DIR/postgres"
 mkdir -p "$DATA_DIR/huggingface_cache"
 mkdir -p "$MODEL_DIR"
-
-# Get the code (clone or update)
-if [ -d "$PROJECT_DIR/.git" ]; then
-    echo "Updating existing repository..."
-    cd "$PROJECT_DIR"
-    git pull
-else
-    echo "Cloning repository..."
-    git clone "$REPO_URL" "$PROJECT_DIR"
-    cd "$PROJECT_DIR"
-fi
+mkdir -p "$LOGS_DIR"
 
 # Copy the existing .env file to the project directory
-echo "Copying .env file to project directory..."
-cp .env "$PROJECT_DIR/.env"
+echo "Copying .env file from $CURRENT_DIR to $PROJECT_DIR"
+cp "$CURRENT_DIR/.env" "$PROJECT_DIR/.env"
 
 # Update docker-compose.yml to use the persistent model directory
 echo "Updating docker-compose.yml for persistent model storage..."
@@ -92,7 +164,7 @@ update_docker_compose() {
 # Execute the update function
 update_docker_compose
 
-# Ask about downloading the models
+# STEP 3: Download models after directories are set up
 echo "Would you like to download the Llama3, Mistral, and Gemma models now? (y/n)"
 echo "Note: This is a one-time download (about 12GB total) and will be reused in the future."
 read download_answer
@@ -110,10 +182,6 @@ EOL
     # Build a temporary image for downloading
     echo "Building temporary download container..."
     docker build -t ollama-downloader "$TEMP_DIR"
-    
-    # Create directory for logs
-    LOGS_DIR="$PROJECT_DIR/logs"
-    mkdir -p "$LOGS_DIR"
     
     # Download each model
     for model in llama3 mistral gemma; do
