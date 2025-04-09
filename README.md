@@ -23,17 +23,27 @@ make build
    - Fast API
    - Streamlit application
 
+# Run the installer
+```bash
+./installer.sh 
 ```
-make compose-up
+This creates a `start.sh` and a `end.sh` batch files.
+
+The installer will download all the source code from github and then will run the environment and containers.
+It will also mount the images and models locally. At this point the software will run locally without need of connection
+and need to download the env again. 
+
+If installer does not start run: 
+```bash
+./start.sh
 ```
 
-Brings docker images up
-
-The following command puts everything together
-
+To stop services:
+```bash
+./end.sh
 ```
-make all
-```
+
+
 
 
 # Migrate openai 
