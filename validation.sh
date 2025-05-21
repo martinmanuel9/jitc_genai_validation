@@ -217,7 +217,7 @@ log "Log file: $LOGFILE"
 
 if [ $missing_files -eq 0 ] && [ $models_missing -eq 0 ] && [ $container_count -ge 3 ] && [ $TEST_EXIT_CODE -eq 0 ]; then
     log "✅ All validation checks PASSED"
-    log "The JITC GENAI Validation System appears to be correctly installed and functional."
+    log "GENAI Validation System appears to be correctly installed and functional."
 else
     log "⚠️ Some validation checks FAILED"
     
